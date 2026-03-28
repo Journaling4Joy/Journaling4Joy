@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Journaling4Joy — Etsy Product Dashboard</title>
+  <meta name="description" content="Create, list, and market digital journals, calendars, and art prints on Etsy.">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="app">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <div class="brand-icon">J4J</div>
+        <div>
+          <h2>Journaling4Joy</h2>
+          <small id="shop-status">Not connected</small>
+        </div>
+      </div>
+      <nav>
+        <a href="#" data-view="dashboard" class="nav-link active">
+          <span class="nav-icon">&#9632;</span> Dashboard
+        </a>
+        <a href="#" data-view="listings" class="nav-link">
+          <span class="nav-icon">&#9776;</span> My Listings
+        </a>
+        <a href="#" data-view="pipeline" class="nav-link">
+          <span class="nav-icon">&#9654;</span> Pipeline
+        </a>
+        <a href="#" data-view="create" class="nav-link">
+          <span class="nav-icon">+</span> Create Product
+        </a>
+        <a href="#" data-view="edits" class="nav-link">
+          <span class="nav-icon">&#9998;</span> Edit Requests
+        </a>
+        <a href="#" data-view="marketing" class="nav-link">
+          <span class="nav-icon">&#9733;</span> Marketing
+        </a>
+        <a href="#" data-view="analytics" class="nav-link">
+          <span class="nav-icon">&#9679;</span> Sales & Analytics
+        </a>
+        <div class="nav-divider"></div>
+        <a href="#" data-view="settings" class="nav-link">
+          <span class="nav-icon">&#9881;</span> Settings
+        </a>
+      </nav>
+      <div class="sidebar-footer">
+        <button class="btn btn-sm btn-outline" id="sync-btn" onclick="syncShop()">Sync Shop</button>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main">
+      <!-- Top Bar -->
+      <header class="topbar">
+        <button class="hamburger" onclick="toggleSidebar()">&#9776;</button>
+        <div class="topbar-title" id="page-title">Dashboard</div>
+        <div class="topbar-actions">
+          <span class="last-sync" id="last-sync">Never synced</span>
+          <button class="btn btn-sm btn-primary" id="connect-btn" onclick="startOAuth()">Connect Etsy</button>
+        </div>
+      </header>
+
+      <!-- ========== DASHBOARD VIEW ========== -->
+      <section id="view-dashboard" class="view active">
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">Active Listings</div>
+            <div class="stat-value" id="stat-active">--</div>
+          </div>
+          <div class="stat-card accent-green">
+            <div class="stat-label">Total Sales</div>
+            <div class="stat-value" id="stat-sales">--</div>
+          </div>
+          <div class="stat-card accent-gold">
+            <div class="stat-label">Revenue</div>
+            <div class="stat-value" id="stat-revenue">--</div>
+          </div>
+          <div class="stat-card accent-purple">
+            <div class="stat-label">Views (30d)</div>
+            <div class="stat-value" id="stat-views">--</div>
+          </div>
+          <div class="stat-card accent-coral">
+            <div class="stat-label">Favorites</div>
+            <div class="stat-value" id="stat-favorites">--</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Pipeline Items</div>
+            <div class="stat-value" id="stat-pipeline">--</div>
+          </div>
+        </div>
+
+        <!-- Recent Activity -->
+        <div class="panel">
+          <div class="panel-header">
+            <h3>Recent Sales</h3>
+          </div>
+          <div class="panel-body" id="recent-sales">
+            <p class="empty-state">Connect your Etsy shop to see recent sales.</p>
+          </div>
+        </div>
+
+        <!-- Top Performers -->
+        <div class="panel">
+          <div class="panel-header">
+            <h3>Top Performing Listings</h3>
+          </div>
+          <div class="panel-body" id="top-listings">
+            <p class="empty-state">Connect your Etsy shop to see top listings.</p>
+          </div>
+        </div>
+
+        <!-- Edit Requests Preview -->
+        <div class="panel">
+          <div class="panel-header">
+            <h3>Pending Edit Requests</h3>
+            <a href="#" data-view="edits" class="nav-link-inline">View All</a>
+          </div>
+          <div class="panel-body" id="dashboard-edits">
+            <p class="empty-state">No pending edit requests.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========== LISTINGS VIEW ========== -->
+      <section id="view-listings" class="view">
+        <div class="view-header">
+          <h2>My Etsy Listings</h2>
+          <div class="view-actions">
+            <input type="text" id="listing-search" placeholder="Search listings..." class="input-search" oninput="filterListings()">
+            <select id="listing-filter" class="input-select" onchange="filterListings()">
+              <option value="all">All Status</option>
+              <option value="active">Active</option>
+              <option value="draft">Draft</option>
+              <option value="inactive">Inactive</option>
+              <option value="sold_out">Sold Out</option>
+            </select>
+          </div>
+        </div>
+        <div class="listings-grid" id="listings-grid">
+          <p class="empty-state">Connect your Etsy shop to see listings.</p>
+        </div>
+      </section>
+
+      <!-- ========== PIPELINE VIEW ========== -->
+      <section id="view-pipeline" class="view">
+        <div class="view-header">
+          <h2>Product Pipeline</h2>
+          <button class="btn btn-primary" onclick="showAddPipelineModal()">+ Add Product</button>
+        </div>
+        <div class="kanban" id="kanban-board">
+          <div class="kanban-col" data-stage="idea">
+            <div class="kanban-header">
+              <h3>Ideas</h3>
+              <span class="count" id="count-idea">0</span>
+            </div>
+            <div class="kanban-items" id="items-idea"></div>
+          </div>
+          <div class="kanban-col" data-stage="creating">
+            <div class="kanban-header">
+              <h3>Creating</h3>
+              <span class="count" id="count-creating">0</span>
+            </div>
+            <div class="kanban-items" id="items-creating"></div>
+          </div>
+          <div class="kanban-col" data-stage="ready">
+            <div class="kanban-header">
+              <h3>Ready to List</h3>
+              <span class="count" id="count-ready">0</span>
+            </div>
+            <div class="kanban-items" id="items-ready"></div>
+          </div>
+          <div class="kanban-col" data-stage="listed">
+            <div class="kanban-header">
+              <h3>Live on Etsy</h3>
+              <span class="count" id="count-listed">0</span>
+            </div>
+            <div class="kanban-items" id="items-listed"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========== CREATE PRODUCT VIEW ========== -->
+      <section id="view-create" class="view">
+        <div class="view-header">
+          <h2>Create New Product</h2>
+        </div>
+        <div class="create-grid">
+          <div class="panel">
+            <div class="panel-header"><h3>Product Details</h3></div>
+            <div class="panel-body">
+              <form id="create-form">
+                <div class="form-group">
+                  <label>Product Name</label>
+                  <input type="text" id="create-name" required placeholder="e.g., Vintage Botanical Journal">
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Category</label>
+                    <select id="create-category">
+                      <option value="junk-journal">Junk Journal</option>
+                      <option value="journal-pages">Journal Pages</option>
+                      <option value="planner">Planner</option>
+                      <option value="calendar">Calendar</option>
+                      <option value="stickers">Stickers</option>
+                      <option value="art-prints">Art Prints</option>
+                      <option value="coloring">Coloring Pages</option>
+                      <option value="ephemera">Ephemera Pack</option>
+                      <option value="notebook">Notebook (KDP)</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Price ($)</label>
+                    <input type="number" id="create-price" step="0.01" min="0.20" value="4.99">
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label>Description</label>
+                  <textarea id="create-desc" rows="5" placeholder="Product description for the Etsy listing..."></textarea>
+                </div>
+                <div class="form-group">
+                  <label>Tags (comma-separated, max 13)</label>
+                  <input type="text" id="create-tags" placeholder="junk journal, digital download, vintage, printable">
+                </div>
+                <div class="form-group">
+                  <label>Product Type</label>
+                  <div class="radio-group">
+                    <label class="radio-label"><input type="radio" name="create-type" value="generate" checked> Auto-Generate Files</label>
+                    <label class="radio-label"><input type="radio" name="create-type" value="upload"> Upload My Own Files</label>
+                  </div>
+                </div>
+                <div id="generate-options">
+                  <div class="form-group">
+                    <label>Pages / Items</label>
+                    <input type="number" id="create-pages" value="10" min="1" max="100">
+                  </div>
+                  <div class="form-group">
+                    <label>Style</label>
+                    <select id="create-style">
+                      <option value="vintage">Vintage / Distressed</option>
+                      <option value="botanical">Botanical</option>
+                      <option value="cottagecore">Cottagecore</option>
+                      <option value="dark-academia">Dark Academia</option>
+                      <option value="minimalist">Minimalist</option>
+                      <option value="witchy">Witchy / Gothic</option>
+                      <option value="ocean">Ocean / Beach</option>
+                      <option value="maryland">Maryland Themed</option>
+                    </select>
+                  </div>
+                </div>
+                <div id="upload-options" style="display:none;">
+                  <div class="form-group">
+                    <label>Upload Files (max 5 files, 20MB each)</label>
+                    <input type="file" id="create-files" multiple accept=".pdf,.zip,.jpg,.png">
+                    <small>For 10+ patterns, ZIP them into one file under 20MB</small>
+                  </div>
+                </div>
+                <div class="form-actions">
+                  <button type="button" class="btn btn-outline" onclick="previewListing()">Preview Listing</button>
+                  <button type="button" class="btn btn-primary" onclick="createProduct()">Create & Add to Pipeline</button>
+                  <button type="button" class="btn btn-accent" onclick="createAndList()">Create & List on Etsy</button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <!-- Listing Preview -->
+          <div class="panel" id="listing-preview-panel" style="display:none;">
+            <div class="panel-header"><h3>Listing Preview</h3></div>
+            <div class="panel-body" id="listing-preview"></div>
+          </div>
+
+          <!-- Templates -->
+          <div class="panel">
+            <div class="panel-header"><h3>Quick Templates</h3></div>
+            <div class="panel-body">
+              <div class="template-grid" id="template-grid"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========== EDIT REQUESTS VIEW ========== -->
+      <section id="view-edits" class="view">
+        <div class="view-header">
+          <h2>Edit Requests</h2>
+          <p class="view-subtitle">Type notes for changes you want made to any product. These will be picked up and applied.</p>
+        </div>
+
+        <!-- Quick Edit for any listing -->
+        <div class="panel">
+          <div class="panel-header"><h3>New Edit Request</h3></div>
+          <div class="panel-body">
+            <div class="form-row">
+              <div class="form-group" style="flex:1;">
+                <label>Select Product</label>
+                <select id="edit-product-select">
+                  <option value="">-- Select a listing --</option>
+                </select>
+              </div>
+              <div class="form-group" style="flex:0 0 150px;">
+                <label>Priority</label>
+                <select id="edit-priority">
+                  <option value="low">Low</option>
+                  <option value="medium" selected>Medium</option>
+                  <option value="high">High</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>What needs to change?</label>
+              <textarea id="edit-notes" rows="4" placeholder="e.g., Change the title to include 'printable', lower the price to $3.99, add more vintage-style pages, update the description to mention it works with GoodNotes..."></textarea>
+            </div>
+            <button class="btn btn-primary" onclick="submitEditRequest()">Submit Edit Request</button>
+          </div>
+        </div>
+
+        <!-- Pending Edits -->
+        <div class="panel">
+          <div class="panel-header">
+            <h3>Pending Edits</h3>
+            <span class="badge" id="pending-count">0</span>
+          </div>
+          <div class="panel-body" id="pending-edits-list">
+            <p class="empty-state">No pending edit requests.</p>
+          </div>
+        </div>
+
+        <!-- Completed Edits -->
+        <div class="panel">
+          <div class="panel-header">
+            <h3>Completed Edits</h3>
+          </div>
+          <div class="panel-body" id="completed-edits-list">
+            <p class="empty-state">No completed edits yet.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========== MARKETING VIEW ========== -->
+      <section id="view-marketing" class="view">
+        <div class="view-header">
+          <h2>Marketing Tools</h2>
+        </div>
+
+        <div class="marketing-grid">
+          <!-- SEO Optimizer -->
+          <div class="panel">
+            <div class="panel-header"><h3>SEO Tag Optimizer</h3></div>
+            <div class="panel-body">
+              <div class="form-group">
+                <label>Select Listing to Optimize</label>
+                <select id="seo-listing-select" onchange="analyzeSEO()">
+                  <option value="">-- Select --</option>
+                </select>
+              </div>
+              <div id="seo-results"></div>
+            </div>
+          </div>
+
+          <!-- Social Media Generator -->
+          <div class="panel">
+            <div class="panel-header"><h3>Social Media Posts</h3></div>
+            <div class="panel-body">
+              <div class="form-group">
+                <label>Select Product</label>
+                <select id="social-listing-select">
+                  <option value="">-- Select --</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Platform</label>
+                <select id="social-platform">
+                  <option value="instagram">Instagram</option>
+                  <option value="pinterest">Pinterest</option>
+                  <option value="tiktok">TikTok</option>
+                  <option value="facebook">Facebook</option>
+                </select>
+              </div>
+              <button class="btn btn-primary" onclick="generateSocialPost()">Generate Post</button>
+              <div id="social-output" style="margin-top:1rem;"></div>
+            </div>
+          </div>
+
+          <!-- Trending Keywords -->
+          <div class="panel">
+            <div class="panel-header"><h3>Trending Etsy Keywords</h3></div>
+            <div class="panel-body">
+              <div class="trending-tags" id="trending-tags"></div>
+              <small style="color:var(--text-muted);">Updated based on seasonal trends and Etsy search data.</small>
+            </div>
+          </div>
+
+          <!-- Listing Renewals -->
+          <div class="panel">
+            <div class="panel-header"><h3>Renewal Scheduler</h3></div>
+            <div class="panel-body">
+              <p style="margin-bottom:1rem;color:var(--text-muted);">Etsy charges $0.20 per listing renewal. Strategic renewals boost visibility.</p>
+              <div id="renewal-list"></div>
+              <button class="btn btn-outline" onclick="suggestRenewals()">Suggest Renewals</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========== ANALYTICS VIEW ========== -->
+      <section id="view-analytics" class="view">
+        <div class="view-header">
+          <h2>Sales & Analytics</h2>
+          <select id="analytics-period" onchange="loadAnalytics()">
+            <option value="7">Last 7 days</option>
+            <option value="30" selected>Last 30 days</option>
+            <option value="90">Last 90 days</option>
+            <option value="365">Last year</option>
+          </select>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-card accent-green">
+            <div class="stat-label">Sales This Period</div>
+            <div class="stat-value" id="ana-sales">--</div>
+          </div>
+          <div class="stat-card accent-gold">
+            <div class="stat-label">Revenue</div>
+            <div class="stat-value" id="ana-revenue">--</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Orders</div>
+            <div class="stat-value" id="ana-orders">--</div>
+          </div>
+          <div class="stat-card accent-purple">
+            <div class="stat-label">Conversion Rate</div>
+            <div class="stat-value" id="ana-conversion">--</div>
+          </div>
+        </div>
+
+        <!-- Sales by Product -->
+        <div class="panel">
+          <div class="panel-header"><h3>Sales by Product</h3></div>
+          <div class="panel-body">
+            <table class="data-table" id="sales-table">
+              <thead>
+                <tr>
+                  <th>Product</th>
+                  <th>Sales</th>
+                  <th>Revenue</th>
+                  <th>Views</th>
+                  <th>Favorites</th>
+                  <th>Conv. Rate</th>
+                </tr>
+              </thead>
+              <tbody id="sales-tbody">
+                <tr><td colspan="6" class="empty-state">Connect your shop to see sales data.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Revenue Chart Placeholder -->
+        <div class="panel">
+          <div class="panel-header"><h3>Revenue Over Time</h3></div>
+          <div class="panel-body">
+            <div class="chart-placeholder" id="revenue-chart">
+              <p class="empty-state">Revenue chart will appear after connecting your shop.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========== SETTINGS VIEW ========== -->
+      <section id="view-settings" class="view">
+        <div class="view-header">
+          <h2>Settings</h2>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header"><h3>Etsy API Connection</h3></div>
+          <div class="panel-body">
+            <div class="connection-status" id="connection-status">
+              <span class="status-dot disconnected"></span>
+              <span>Not connected</span>
+            </div>
+            <div class="form-group">
+              <label>API Keystring</label>
+              <input type="password" id="setting-keystring" placeholder="Your Etsy API keystring">
+            </div>
+            <div class="form-group">
+              <label>Shared Secret</label>
+              <input type="password" id="setting-secret" placeholder="Your shared secret">
+            </div>
+            <div class="form-group">
+              <label>Shop ID</label>
+              <input type="text" id="setting-shop-id" placeholder="Auto-detected after connection">
+            </div>
+            <div class="form-group">
+              <label>OAuth Redirect URI</label>
+              <input type="text" id="setting-redirect" readonly>
+            </div>
+            <div class="form-actions">
+              <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
+              <button class="btn btn-accent" onclick="startOAuth()">Connect to Etsy</button>
+              <button class="btn btn-outline" onclick="testConnection()">Test Connection</button>
+            </div>
+            <div id="settings-message" style="margin-top:1rem;"></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header"><h3>Etsy API Setup Guide</h3></div>
+          <div class="panel-body">
+            <ol class="setup-steps">
+              <li>Go to <a href="https://www.etsy.com/developers/your-apps" target="_blank">Etsy Developer Portal</a></li>
+              <li>Create an app or use your existing "upload-calendar" app</li>
+              <li>Copy the <strong>Keystring</strong> and <strong>Shared Secret</strong> above</li>
+              <li>Set the <strong>Callback URL</strong> in your Etsy app to: <code id="callback-url"></code></li>
+              <li>Click <strong>Connect to Etsy</strong> to authorize</li>
+            </ol>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header"><h3>Data Management</h3></div>
+          <div class="panel-body">
+            <div class="form-actions">
+              <button class="btn btn-outline" onclick="exportData()">Export All Data (JSON)</button>
+              <button class="btn btn-outline" onclick="document.getElementById('import-file').click()">Import Data</button>
+              <input type="file" id="import-file" accept=".json" style="display:none;" onchange="importData(event)">
+              <button class="btn btn-danger" onclick="clearAllData()">Reset Everything</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Modal -->
+  <div class="modal-overlay" id="modal-overlay" onclick="closeModal()">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 id="modal-title">Modal</h3>
+        <button class="modal-close" onclick="closeModal()">&times;</button>
+      </div>
+      <div class="modal-body" id="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <script src="js/etsy-api.js"></script>
+  <script src="js/products.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
