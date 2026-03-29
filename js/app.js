@@ -29,6 +29,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderTrendingTags();
   populateProductSelects();
   initScheduler();
+  initGenerator();
 
   // Set redirect URI display
   const redirectUri = EtsyAPI.getRedirectUri();
@@ -72,8 +73,9 @@ function switchView(view) {
 
   const titles = {
     dashboard: 'Dashboard', listings: 'My Listings', pipeline: 'Pipeline',
-    create: 'Create Product', edits: 'Edit Requests', scheduler: 'Listing Scheduler',
-    marketing: 'Marketing', analytics: 'Sales & Analytics', settings: 'Settings'
+    create: 'Create Product', edits: 'Edit Requests', generator: 'Pattern Generator',
+    scheduler: 'Listing Scheduler', marketing: 'Marketing',
+    analytics: 'Sales & Analytics', settings: 'Settings'
   };
   document.getElementById('page-title').textContent = titles[view] || view;
 }
@@ -928,6 +930,423 @@ function clearAllData() {
   listings = [];
   salesData = [];
   location.reload();
+}
+
+// --- Pattern Generator ---
+const GEN_API = 'http://localhost:4444/api';
+let selectedPreset = 'damask';
+let selectedColor = 'gold';
+let genPresets = [];
+let genColors = [];
+
+// Fallback presets if server is offline
+const FALLBACK_PRESETS = [
+  { id: 'damask', name: 'Damask Pattern', style: 'vintage' },
+  { id: 'damask-pysanky', name: 'Pysanky Damask', style: 'folk' },
+  { id: 'damask-mayan', name: 'Mayan Damask', style: 'ancient' },
+  { id: 'metallic', name: 'Metallic Texture', style: 'luxury' },
+  { id: 'metallic-foil', name: 'Metallic Foil', style: 'luxury' },
+  { id: 'metallic-glitter', name: 'Metallic Glitter', style: 'luxury' },
+  { id: 'watercolor', name: 'Watercolor Wash', style: 'artistic' },
+  { id: 'watercolor-floral', name: 'Watercolor Floral', style: 'botanical' },
+  { id: 'vintage', name: 'Vintage Distressed', style: 'aged' },
+  { id: 'vintage-ephemera', name: 'Vintage Ephemera', style: 'collage' },
+  { id: 'floral', name: 'Classic Floral', style: 'botanical' },
+  { id: 'geometric', name: 'Geometric', style: 'modern' },
+  { id: 'chevron', name: 'Chevron', style: 'graphic' },
+  { id: 'stars', name: 'Stars', style: 'whimsical' },
+  { id: 'mosaic', name: 'Mosaic / Rock', style: 'natural' },
+  { id: 'cottage-floral', name: 'Cottagecore Floral', style: 'cottagecore' },
+  { id: 'dark-academia', name: 'Dark Academia', style: 'scholarly' },
+  { id: 'gothic', name: 'Gothic / Witchy', style: 'gothic' },
+];
+
+const FALLBACK_COLORS = [
+  { id: 'rose-gold', name: 'Rose Gold', hex: '#B76E79' },
+  { id: 'gold', name: 'Gold', hex: '#D4AF37' },
+  { id: 'silver', name: 'Silver', hex: '#C0C0C0' },
+  { id: 'amethyst', name: 'Amethyst Purple', hex: '#9966CC' },
+  { id: 'sapphire', name: 'Sapphire Blue', hex: '#0F52BA' },
+  { id: 'emerald', name: 'Emerald Green', hex: '#50C878' },
+  { id: 'ruby', name: 'Ruby Red', hex: '#E0115F' },
+  { id: 'opal', name: 'Opal', hex: '#A8C3BC' },
+  { id: 'cotton-candy', name: 'Cotton Candy', hex: '#FFBCD9' },
+  { id: 'black', name: 'Black/Onyx', hex: '#1C1C1C' },
+  { id: 'steel-gray', name: 'Steel Gray', hex: '#71797E' },
+  { id: 'cream', name: 'Cream', hex: '#FFFDD0' },
+  { id: 'brown', name: 'Brown/Sepia', hex: '#8B4513' },
+  { id: 'dusty-rose', name: 'Dusty Rose', hex: '#DCAE96' },
+  { id: 'sage', name: 'Sage Green', hex: '#B2AC88' },
+  { id: 'navy', name: 'Navy Blue', hex: '#000080' },
+  { id: 'burgundy', name: 'Burgundy', hex: '#800020' },
+  { id: 'teal', name: 'Teal', hex: '#008080' },
+];
+
+async function initGenerator() {
+  // Check server status
+  const statusEl = document.getElementById('gen-server-status');
+  try {
+    const resp = await fetch(`${GEN_API}/health`);
+    if (resp.ok) {
+      statusEl.textContent = 'Server: connected';
+      statusEl.style.color = 'var(--green)';
+      // Load presets from server
+      const presetsResp = await fetch(`${GEN_API}/presets`);
+      const data = await presetsResp.json();
+      genPresets = data.presets;
+      genColors = data.colors;
+    } else {
+      throw new Error('not ok');
+    }
+  } catch {
+    statusEl.textContent = 'Server: offline (start with npm run server)';
+    statusEl.style.color = 'var(--coral)';
+    genPresets = FALLBACK_PRESETS;
+    genColors = FALLBACK_COLORS;
+  }
+
+  renderPresetGrid();
+  renderColorGrid();
+  loadCollections();
+}
+
+function renderPresetGrid() {
+  const grid = document.getElementById('preset-grid');
+  if (!grid) return;
+
+  const styleIcons = {
+    vintage: '&#127979;', folk: '&#127928;', ancient: '&#127963;',
+    luxury: '&#128142;', artistic: '&#127912;', botanical: '&#127804;',
+    aged: '&#128220;', collage: '&#128444;', modern: '&#9670;',
+    graphic: '&#9650;', whimsical: '&#11088;', natural: '&#129704;',
+    cottagecore: '&#127803;', scholarly: '&#128218;', gothic: '&#127769;',
+  };
+
+  grid.innerHTML = genPresets.map(p => `
+    <div class="preset-card ${p.id === selectedPreset ? 'selected' : ''}" onclick="selectPreset('${p.id}')">
+      <span class="preset-icon">${styleIcons[p.style] || '&#9632;'}</span>
+      <span class="preset-name">${p.name}</span>
+    </div>
+  `).join('');
+}
+
+function renderColorGrid() {
+  const grid = document.getElementById('color-grid');
+  if (!grid) return;
+
+  grid.innerHTML = genColors.map(c => `
+    <div class="color-swatch ${c.id === selectedColor ? 'selected' : ''}"
+         style="background:${c.hex};"
+         onclick="selectColor('${c.id}')"
+         title="${c.name}">
+    </div>
+  `).join('');
+}
+
+function selectPreset(id) {
+  selectedPreset = id;
+  renderPresetGrid();
+  updateGenName();
+}
+
+function selectColor(id) {
+  selectedColor = id;
+  renderColorGrid();
+  updateGenName();
+}
+
+function updateGenName() {
+  const nameEl = document.getElementById('gen-name');
+  if (nameEl && !nameEl.value) {
+    // Don't auto-fill if user typed something
+  }
+}
+
+async function generateSinglePattern() {
+  const statusEl = document.getElementById('gen-server-status');
+  if (statusEl.textContent.includes('offline')) {
+    toast('Start the backend server first: cd backend && npm run server', 'error');
+    return;
+  }
+
+  const customPrompt = document.getElementById('gen-custom-prompt')?.value?.trim() || undefined;
+  const provider = document.getElementById('gen-provider')?.value || 'openai';
+  const seamless = document.getElementById('gen-seamless')?.value !== 'false';
+  const name = document.getElementById('gen-name')?.value?.trim() || undefined;
+
+  const progress = document.getElementById('gen-progress');
+  const progressFill = document.getElementById('gen-progress-fill');
+  const progressText = document.getElementById('gen-progress-text');
+
+  progress.style.display = '';
+  progressFill.style.width = '20%';
+  progressText.textContent = `Generating ${selectedPreset} in ${selectedColor}...`;
+
+  try {
+    progressFill.style.width = '40%';
+    const resp = await fetch(`${GEN_API}/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        preset: selectedPreset,
+        color: selectedColor,
+        name,
+        customPrompt,
+        provider,
+        seamless,
+      }),
+    });
+
+    progressFill.style.width = '80%';
+    const data = await resp.json();
+
+    if (data.error) {
+      throw new Error(data.error);
+    }
+
+    progressFill.style.width = '100%';
+    progressText.textContent = 'Done!';
+
+    // Show preview
+    showPatternPreview(data.result);
+    loadCollections();
+    toast(`Pattern generated: ${data.result.name}`, 'success');
+  } catch (e) {
+    progressText.textContent = `Error: ${e.message}`;
+    progressFill.style.background = 'var(--coral)';
+    toast(`Generation failed: ${e.message}`, 'error');
+  }
+
+  setTimeout(() => {
+    progress.style.display = 'none';
+    progressFill.style.width = '0%';
+    progressFill.style.background = '';
+  }, 5000);
+}
+
+function showPatternPreview(result) {
+  const preview = document.getElementById('gen-preview');
+  if (!preview) return;
+
+  // Convert local path to URL served by backend
+  const imagePath = result.files?.final || result.files?.raw;
+  const relativePath = imagePath ? imagePath.replace(/\\/g, '/').split('source-assets/')[1] : null;
+  const imageUrl = relativePath ? `${GEN_API.replace('/api', '')}/source-assets/${relativePath}` : null;
+
+  preview.innerHTML = `
+    <div class="gen-result">
+      ${imageUrl ? `<img src="${imageUrl}" alt="${result.name}" class="gen-result-img" onclick="window.open('${imageUrl}', '_blank')">` : '<div class="gen-result-placeholder">Image generated (open source-assets folder to view)</div>'}
+      <div class="gen-result-info">
+        <h4>${result.name}</h4>
+        <p>Preset: ${result.preset} | Color: ${result.color}</p>
+        <p>${result.dimensions?.inches} at ${result.dimensions?.dpi} DPI (${result.dimensions?.width}x${result.dimensions?.height}px)</p>
+        <p style="font-size:0.7rem;color:var(--text-dim);margin-top:4px;">Provider: ${result.provider} | ${new Date(result.generatedAt).toLocaleString()}</p>
+        <div class="gen-result-actions" style="margin-top:12px;">
+          <button class="btn btn-sm btn-primary" onclick="addPatternToSchedule('${result.name}')">Schedule Listing</button>
+          <button class="btn btn-sm btn-outline" onclick="addPatternToPipeline('${result.name}')">Add to Pipeline</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function showBatchGenerateModal() {
+  const statusEl = document.getElementById('gen-server-status');
+  if (statusEl.textContent.includes('offline')) {
+    toast('Start the backend server first: cd backend && npm run server', 'error');
+    return;
+  }
+
+  const colorCheckboxes = genColors.map(c => `
+    <label class="color-check" style="display:inline-flex;align-items:center;gap:6px;margin:4px 8px;">
+      <input type="checkbox" value="${c.id}" ${['gold', 'rose-gold', 'amethyst', 'sapphire', 'emerald'].includes(c.id) ? 'checked' : ''}>
+      <span class="color-swatch-sm" style="background:${c.hex};width:16px;height:16px;border-radius:3px;display:inline-block;"></span>
+      <span style="font-size:0.8rem;">${c.name}</span>
+    </label>
+  `).join('');
+
+  const html = `
+    <p style="margin-bottom:16px;color:var(--text-muted);">Generate a full collection: same pattern in multiple colors. Perfect for creating color-coordinated digital paper packs.</p>
+    <div class="form-group">
+      <label>Pattern Style: <strong>${genPresets.find(p => p.id === selectedPreset)?.name || selectedPreset}</strong></label>
+    </div>
+    <div class="form-group">
+      <label>Collection Name</label>
+      <input type="text" id="batch-gen-name" placeholder="e.g., Vintage Damask Collection" value="${genPresets.find(p => p.id === selectedPreset)?.name || selectedPreset} Collection">
+    </div>
+    <div class="form-group">
+      <label>Select Colors</label>
+      <div style="max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius);padding:8px;">
+        ${colorCheckboxes}
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>AI Provider</label>
+        <select id="batch-gen-provider">
+          <option value="openai">OpenAI (DALL-E 3)</option>
+          <option value="stability">Stability AI (SD3)</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-actions" style="margin-top:16px;">
+      <button class="btn btn-primary" onclick="startBatchGenerate()">Generate Collection</button>
+      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+    </div>
+  `;
+
+  showModal('Batch Generate Collection', html);
+}
+
+async function startBatchGenerate() {
+  const baseName = document.getElementById('batch-gen-name')?.value?.trim() || 'Collection';
+  const provider = document.getElementById('batch-gen-provider')?.value || 'openai';
+  const checkboxes = document.querySelectorAll('#modal-body .color-check input:checked');
+  const colors = Array.from(checkboxes).map(cb => cb.value);
+
+  if (colors.length === 0) {
+    toast('Select at least one color.', 'error');
+    return;
+  }
+
+  closeModal();
+
+  const progress = document.getElementById('gen-progress');
+  const progressFill = document.getElementById('gen-progress-fill');
+  const progressText = document.getElementById('gen-progress-text');
+
+  progress.style.display = '';
+  progressFill.style.width = '10%';
+  progressText.textContent = `Generating ${colors.length} patterns... This may take a few minutes.`;
+
+  try {
+    const resp = await fetch(`${GEN_API}/generate-batch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        preset: selectedPreset,
+        colors,
+        baseName,
+        provider,
+        seamless: true,
+      }),
+    });
+
+    progressFill.style.width = '90%';
+    const data = await resp.json();
+
+    if (data.error) throw new Error(data.error);
+
+    progressFill.style.width = '100%';
+    const successCount = data.result.results.filter(r => !r.error).length;
+    progressText.textContent = `Done! ${successCount}/${colors.length} patterns generated.`;
+
+    loadCollections();
+    toast(`Collection "${baseName}" generated: ${successCount} patterns`, 'success');
+  } catch (e) {
+    progressText.textContent = `Error: ${e.message}`;
+    progressFill.style.background = 'var(--coral)';
+    toast(`Batch generation failed: ${e.message}`, 'error');
+  }
+
+  setTimeout(() => {
+    progress.style.display = 'none';
+    progressFill.style.width = '0%';
+    progressFill.style.background = '';
+  }, 8000);
+}
+
+async function loadCollections() {
+  const listEl = document.getElementById('collections-list');
+  if (!listEl) return;
+
+  try {
+    const resp = await fetch(`${GEN_API}/collections`);
+    const data = await resp.json();
+
+    if (!data.collections || data.collections.length === 0) {
+      listEl.innerHTML = '<p class="empty-state">No generated collections yet.</p>';
+      return;
+    }
+
+    listEl.innerHTML = data.collections.map(col => {
+      const name = col.collection || col.name;
+      const count = col.results ? col.results.length : col.files?.length || 0;
+      const date = col.generatedAt ? new Date(col.generatedAt).toLocaleDateString() : '';
+      return `<div class="queue-item">
+        <div class="queue-item-info">
+          <h4>${name}</h4>
+          <p>${count} patterns ${col.preset ? `| ${col.preset}` : ''} ${date ? `| ${date}` : ''}</p>
+        </div>
+        <div class="queue-item-actions">
+          <button class="btn btn-sm btn-primary" onclick="scheduleCollection('${name}')">Schedule All</button>
+        </div>
+      </div>`;
+    }).join('');
+  } catch {
+    listEl.innerHTML = '<p class="empty-state">Start the backend server to view collections.</p>';
+  }
+}
+
+function addPatternToSchedule(name) {
+  switchView('scheduler');
+  showScheduleModal();
+  setTimeout(() => {
+    const titleEl = document.getElementById('sched-title');
+    if (titleEl) titleEl.value = name + ' - Digital Paper Pack';
+  }, 100);
+}
+
+function addPatternToPipeline(name) {
+  Products.addToPipeline({
+    name: name + ' - Digital Paper Pack',
+    category: 'digital-paper',
+    stage: 'creating',
+  });
+  renderPipeline();
+  toast(`Added "${name}" to pipeline.`, 'success');
+}
+
+function scheduleCollection(collectionName) {
+  switchView('scheduler');
+  showBatchModal();
+  // Pre-fill the batch titles with collection name variations
+  setTimeout(() => {
+    const titlesEl = document.getElementById('batch-titles');
+    if (titlesEl) {
+      titlesEl.value = `${collectionName} - Digital Paper Pack\n${collectionName} - Mega Bundle`;
+    }
+  }, 100);
+}
+
+async function saveGeneratorKeys() {
+  const openaiKey = document.getElementById('gen-openai-key')?.value?.trim();
+  const stabilityKey = document.getElementById('gen-stability-key')?.value?.trim();
+
+  try {
+    const resp = await fetch(`${GEN_API}/health`);
+    if (!resp.ok) throw new Error('Server offline');
+
+    // Save to backend config file via the server
+    const configResp = await fetch(`${GEN_API}/save-schedule`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        openaiApiKey: openaiKey,
+        stabilityApiKey: stabilityKey,
+      }),
+    });
+
+    // Also save locally for reference
+    localStorage.setItem('j4j-gen-keys', JSON.stringify({
+      openai: openaiKey ? '***configured***' : '',
+      stability: stabilityKey ? '***configured***' : '',
+    }));
+
+    toast('API keys saved to backend config.', 'success');
+  } catch {
+    toast('Server offline. Start it first: cd backend && npm run server', 'error');
+  }
 }
 
 // --- Scheduler ---

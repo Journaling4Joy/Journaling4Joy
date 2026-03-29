@@ -1,13 +1,16 @@
 {
-  "name": "j4j-scheduler",
+  "name": "j4j-backend",
   "version": "1.0.0",
-  "description": "Journaling4Joy — Listing Scheduler Backend",
+  "description": "Journaling4Joy — Scheduler & Pattern Generation Backend",
   "type": "module",
   "scripts": {
     "scheduler": "node scheduler.js",
-    "check": "node scheduler.js --check-only"
+    "check": "node scheduler.js --check-only",
+    "generate": "node pattern-generator.js",
+    "server": "node server.js"
   },
   "dependencies": {
-    "node-fetch": "^3.3.0"
+    "node-fetch": "^3.3.0",
+    "sharp": "^0.33.0"
   }
 }

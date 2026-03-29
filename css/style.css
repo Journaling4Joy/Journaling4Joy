@@ -1035,3 +1035,137 @@ body {
   padding: 4px 8px;
   font-size: 0.7rem;
 }
+
+/* ---- Pattern Generator ---- */
+.preset-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.preset-card {
+  padding: 10px 8px;
+  background: var(--surface2);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.15s;
+}
+
+.preset-card:hover {
+  border-color: var(--border-light);
+  background: var(--surface3);
+}
+
+.preset-card.selected {
+  border-color: var(--primary);
+  background: var(--primary-bg);
+}
+
+.preset-icon {
+  display: block;
+  font-size: 1.4rem;
+  margin-bottom: 4px;
+}
+
+.preset-name {
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.preset-card.selected .preset-name {
+  color: var(--primary);
+}
+
+.color-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.color-swatch {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: all 0.15s;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.1);
+}
+
+.color-swatch:hover {
+  transform: scale(1.15);
+}
+
+.color-swatch.selected {
+  border-color: #fff;
+  transform: scale(1.15);
+  box-shadow: 0 0 0 2px var(--primary), inset 0 0 0 1px rgba(255,255,255,0.2);
+}
+
+.gen-advanced {
+  margin: 12px 0;
+  padding: 12px;
+  background: var(--surface2);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+
+.gen-advanced summary {
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.gen-progress-bar {
+  height: 6px;
+  background: var(--surface3);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.gen-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary), var(--purple));
+  border-radius: 3px;
+  transition: width 0.5s ease;
+  width: 0%;
+}
+
+.gen-result {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.gen-result-img {
+  width: 100%;
+  max-height: 400px;
+  object-fit: contain;
+  border-radius: var(--radius);
+  cursor: zoom-in;
+  border: 1px solid var(--border);
+}
+
+.gen-result-info h4 {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.gen-result-info p {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.gen-preview-empty {
+  min-height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

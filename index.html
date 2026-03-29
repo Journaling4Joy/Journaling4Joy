@@ -35,6 +35,9 @@
         <a href="#" data-view="edits" class="nav-link">
           <span class="nav-icon">&#9998;</span> Edit Requests
         </a>
+        <a href="#" data-view="generator" class="nav-link">
+          <span class="nav-icon">&#127912;</span> Pattern Generator
+        </a>
         <a href="#" data-view="scheduler" class="nav-link">
           <span class="nav-icon">&#128197;</span> Scheduler
         </a>
@@ -339,6 +342,125 @@
           </div>
           <div class="panel-body" id="completed-edits-list">
             <p class="empty-state">No completed edits yet.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========== PATTERN GENERATOR VIEW ========== -->
+      <section id="view-generator" class="view">
+        <div class="view-header">
+          <h2>Pattern Generator</h2>
+          <div class="view-actions">
+            <span class="last-sync" id="gen-server-status">Server: checking...</span>
+          </div>
+        </div>
+
+        <!-- Generator Controls -->
+        <div class="create-grid">
+          <div class="panel">
+            <div class="panel-header"><h3>Generate New Pattern</h3></div>
+            <div class="panel-body">
+              <!-- Preset Selector -->
+              <div class="form-group">
+                <label>Pattern Style</label>
+                <div class="preset-grid" id="preset-grid"></div>
+              </div>
+
+              <!-- Color Selector -->
+              <div class="form-group">
+                <label>Color</label>
+                <div class="color-grid" id="color-grid"></div>
+              </div>
+
+              <!-- Advanced Options -->
+              <details class="gen-advanced">
+                <summary>Advanced Options</summary>
+                <div class="form-group" style="margin-top:12px;">
+                  <label>Custom Prompt (overrides preset)</label>
+                  <textarea id="gen-custom-prompt" rows="3" placeholder="Leave empty to use preset prompt..."></textarea>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>AI Provider</label>
+                    <select id="gen-provider">
+                      <option value="openai">OpenAI (DALL-E 3)</option>
+                      <option value="stability">Stability AI (SD3)</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Seamless Tiling</label>
+                    <select id="gen-seamless">
+                      <option value="true">Yes (recommended)</option>
+                      <option value="false">No</option>
+                    </select>
+                  </div>
+                </div>
+              </details>
+
+              <div class="form-group">
+                <label>Output Name</label>
+                <input type="text" id="gen-name" placeholder="Auto-generated from preset + color">
+              </div>
+
+              <div class="form-actions">
+                <button class="btn btn-primary" onclick="generateSinglePattern()">Generate Pattern</button>
+                <button class="btn btn-accent" onclick="showBatchGenerateModal()">Batch Generate (Collection)</button>
+              </div>
+
+              <!-- Generation Progress -->
+              <div id="gen-progress" style="display:none; margin-top:16px;">
+                <div class="gen-progress-bar">
+                  <div class="gen-progress-fill" id="gen-progress-fill"></div>
+                </div>
+                <p id="gen-progress-text" style="font-size:0.8rem;color:var(--text-muted);margin-top:4px;">Generating...</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Preview / Result -->
+          <div class="panel">
+            <div class="panel-header"><h3>Preview</h3></div>
+            <div class="panel-body" id="gen-preview">
+              <div class="gen-preview-empty">
+                <p style="color:var(--text-muted);text-align:center;padding:40px 20px;">
+                  Select a preset and color, then click Generate to create a pattern.
+                  <br><br>
+                  Output: 300 DPI, 12x12" seamless tileable JPEG
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Existing Collections -->
+        <div class="panel">
+          <div class="panel-header">
+            <h3>Generated Collections</h3>
+            <button class="btn btn-sm btn-outline" onclick="loadCollections()">Refresh</button>
+          </div>
+          <div class="panel-body" id="collections-list">
+            <p class="empty-state">No generated collections yet. Generate your first pattern above!</p>
+          </div>
+        </div>
+
+        <!-- API Key Setup -->
+        <div class="panel">
+          <div class="panel-header"><h3>AI Provider Settings</h3></div>
+          <div class="panel-body">
+            <div class="form-row">
+              <div class="form-group" style="flex:1;">
+                <label>OpenAI API Key</label>
+                <input type="password" id="gen-openai-key" placeholder="sk-...">
+              </div>
+              <div class="form-group" style="flex:1;">
+                <label>Stability AI API Key</label>
+                <input type="password" id="gen-stability-key" placeholder="sk-...">
+              </div>
+            </div>
+            <p style="font-size:0.75rem;color:var(--text-muted);margin-bottom:12px;">
+              Keys are saved to the local backend config. They never leave your machine.
+            </p>
+            <button class="btn btn-outline" onclick="saveGeneratorKeys()">Save API Keys</button>
           </div>
         </div>
       </section>

@@ -1,0 +1,4 @@
+node_modules/
+schedule.json
+scheduler.log
+generator-config.json
