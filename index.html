@@ -35,6 +35,9 @@
         <a href="#" data-view="edits" class="nav-link">
           <span class="nav-icon">&#9998;</span> Edit Requests
         </a>
+        <a href="#" data-view="scheduler" class="nav-link">
+          <span class="nav-icon">&#128197;</span> Scheduler
+        </a>
         <a href="#" data-view="marketing" class="nav-link">
           <span class="nav-icon">&#9733;</span> Marketing
         </a>
@@ -340,6 +343,89 @@
         </div>
       </section>
 
+      <!-- ========== SCHEDULER VIEW ========== -->
+      <section id="view-scheduler" class="view">
+        <div class="view-header">
+          <h2>Listing Scheduler</h2>
+          <div class="view-actions">
+            <button class="btn btn-primary" onclick="showScheduleModal()">+ Schedule Listing</button>
+            <button class="btn btn-outline" onclick="showBatchModal()">Batch Schedule</button>
+            <button class="btn btn-outline" onclick="Scheduler.downloadExport()">Export for Backend</button>
+          </div>
+        </div>
+
+        <!-- Schedule Stats -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">Scheduled</div>
+            <div class="stat-value" id="sched-stat-pending">0</div>
+          </div>
+          <div class="stat-card accent-green">
+            <div class="stat-label">Published</div>
+            <div class="stat-value" id="sched-stat-published">0</div>
+          </div>
+          <div class="stat-card accent-gold">
+            <div class="stat-label">Next Up</div>
+            <div class="stat-value" id="sched-stat-next" style="font-size:0.9rem;">--</div>
+          </div>
+          <div class="stat-card accent-coral">
+            <div class="stat-label">Failed</div>
+            <div class="stat-value" id="sched-stat-failed">0</div>
+          </div>
+        </div>
+
+        <!-- Calendar -->
+        <div class="panel">
+          <div class="panel-header">
+            <button class="btn btn-sm btn-outline" onclick="changeCalendarMonth(-1)">&larr;</button>
+            <h3 id="calendar-month-title">March 2026</h3>
+            <button class="btn btn-sm btn-outline" onclick="changeCalendarMonth(1)">&rarr;</button>
+          </div>
+          <div class="panel-body">
+            <div class="calendar-grid" id="calendar-grid"></div>
+          </div>
+        </div>
+
+        <!-- Upcoming Queue -->
+        <div class="panel">
+          <div class="panel-header">
+            <h3>Upcoming Queue</h3>
+            <span class="badge" id="queue-count">0</span>
+          </div>
+          <div class="panel-body" id="schedule-queue">
+            <p class="empty-state">No scheduled listings. Click "Schedule Listing" to get started.</p>
+          </div>
+        </div>
+
+        <!-- Published History -->
+        <div class="panel">
+          <div class="panel-header">
+            <h3>Recently Published</h3>
+          </div>
+          <div class="panel-body" id="published-history">
+            <p class="empty-state">No published listings yet.</p>
+          </div>
+        </div>
+
+        <!-- Scheduler Settings -->
+        <div class="panel">
+          <div class="panel-header"><h3>Scheduler Settings</h3></div>
+          <div class="panel-body">
+            <div class="form-row">
+              <div class="form-group">
+                <label>Default Publish Time</label>
+                <input type="time" id="sched-default-time" value="10:00">
+              </div>
+              <div class="form-group">
+                <label>Days Between Batch Items</label>
+                <input type="number" id="sched-batch-gap" min="1" max="30" value="1">
+              </div>
+            </div>
+            <button class="btn btn-outline" onclick="saveSchedulerSettings()">Save Settings</button>
+          </div>
+        </div>
+      </section>
+
       <!-- ========== MARKETING VIEW ========== -->
       <section id="view-marketing" class="view">
         <div class="view-header">
@@ -553,6 +639,7 @@
 
   <script src="js/etsy-api.js"></script>
   <script src="js/products.js"></script>
+  <script src="js/scheduler.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

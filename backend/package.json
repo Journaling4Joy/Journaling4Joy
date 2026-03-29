@@ -1,0 +1,13 @@
+{
+  "name": "j4j-scheduler",
+  "version": "1.0.0",
+  "description": "Journaling4Joy — Listing Scheduler Backend",
+  "type": "module",
+  "scripts": {
+    "scheduler": "node scheduler.js",
+    "check": "node scheduler.js --check-only"
+  },
+  "dependencies": {
+    "node-fetch": "^3.3.0"
+  }
+}

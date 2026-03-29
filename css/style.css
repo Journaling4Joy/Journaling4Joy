@@ -897,3 +897,141 @@ body {
   .form-row { flex-direction: column; }
   .marketing-grid { grid-template-columns: 1fr; }
 }
+
+/* ---- Scheduler Calendar ---- */
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.calendar-header {
+  padding: 8px 4px;
+  text-align: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.calendar-day {
+  min-height: 80px;
+  padding: 6px;
+  background: var(--surface2);
+  border-radius: 4px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.calendar-day:hover {
+  border-color: var(--border-light);
+  background: var(--surface3);
+}
+
+.calendar-day.empty {
+  background: transparent;
+  cursor: default;
+}
+
+.calendar-day.today {
+  border-color: var(--primary);
+  background: var(--primary-bg);
+}
+
+.calendar-day.has-items {
+  border-color: var(--gold);
+}
+
+.calendar-day-num {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.calendar-day.today .calendar-day-num {
+  color: var(--primary);
+}
+
+.calendar-item {
+  font-size: 0.65rem;
+  padding: 2px 4px;
+  margin-bottom: 2px;
+  border-radius: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.calendar-item.scheduled {
+  background: var(--gold-bg);
+  color: var(--gold);
+}
+
+.calendar-item.published {
+  background: var(--green-bg);
+  color: var(--green);
+}
+
+.calendar-item.failed {
+  background: var(--coral-bg);
+  color: var(--coral);
+}
+
+.calendar-item.cancelled {
+  background: var(--surface3);
+  color: var(--text-dim);
+  text-decoration: line-through;
+}
+
+/* Queue items */
+.queue-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  gap: 12px;
+}
+
+.queue-item:last-child {
+  border-bottom: none;
+}
+
+.queue-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.queue-item-info h4 {
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.queue-item-info p {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.queue-item-time {
+  font-size: 0.8rem;
+  color: var(--gold);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.queue-item-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.queue-item-actions .btn {
+  padding: 4px 8px;
+  font-size: 0.7rem;
+}

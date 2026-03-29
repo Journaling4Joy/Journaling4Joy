@@ -28,6 +28,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderTemplates();
   renderTrendingTags();
   populateProductSelects();
+  initScheduler();
 
   // Set redirect URI display
   const redirectUri = EtsyAPI.getRedirectUri();
@@ -71,8 +72,8 @@ function switchView(view) {
 
   const titles = {
     dashboard: 'Dashboard', listings: 'My Listings', pipeline: 'Pipeline',
-    create: 'Create Product', edits: 'Edit Requests', marketing: 'Marketing',
-    analytics: 'Sales & Analytics', settings: 'Settings'
+    create: 'Create Product', edits: 'Edit Requests', scheduler: 'Listing Scheduler',
+    marketing: 'Marketing', analytics: 'Sales & Analytics', settings: 'Settings'
   };
   document.getElementById('page-title').textContent = titles[view] || view;
 }
@@ -927,6 +928,577 @@ function clearAllData() {
   listings = [];
   salesData = [];
   location.reload();
+}
+
+// --- Scheduler ---
+let calendarYear = new Date().getFullYear();
+let calendarMonth = new Date().getMonth();
+
+function initScheduler() {
+  renderCalendar();
+  renderScheduleQueue();
+  renderPublishedHistory();
+  updateScheduleStats();
+
+  // Load scheduler settings into form
+  const schedSettings = Scheduler.getSettings();
+  const timeEl = document.getElementById('sched-default-time');
+  const gapEl = document.getElementById('sched-batch-gap');
+  if (timeEl) timeEl.value = schedSettings.defaultTime || '10:00';
+  if (gapEl) gapEl.value = schedSettings.batchGap || 1;
+}
+
+function updateScheduleStats() {
+  const stats = Scheduler.getStats();
+  document.getElementById('sched-stat-pending').textContent = stats.scheduled;
+  document.getElementById('sched-stat-published').textContent = stats.published;
+  document.getElementById('sched-stat-failed').textContent = stats.failed;
+
+  const nextEl = document.getElementById('sched-stat-next');
+  if (stats.nextUp) {
+    const d = new Date(stats.nextUp.publishAt);
+    nextEl.textContent = `${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} ${d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+  } else {
+    nextEl.textContent = '--';
+  }
+
+  document.getElementById('queue-count').textContent = stats.scheduled;
+}
+
+function renderCalendar() {
+  const cal = Scheduler.getCalendarMonth(calendarYear, calendarMonth);
+  const titleEl = document.getElementById('calendar-month-title');
+  titleEl.textContent = `${cal.monthName} ${cal.year}`;
+
+  const grid = document.getElementById('calendar-grid');
+  const today = new Date().toISOString().slice(0, 10);
+
+  // Day headers
+  let html = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+    .map(d => `<div class="calendar-header">${d}</div>`).join('');
+
+  // Day cells
+  html += cal.days.map(d => {
+    if (d.day === null) return '<div class="calendar-day empty"></div>';
+
+    const isToday = d.date === today;
+    const hasItems = d.items.length > 0;
+    const classes = ['calendar-day'];
+    if (isToday) classes.push('today');
+    if (hasItems) classes.push('has-items');
+
+    const itemsHtml = d.items.slice(0, 3).map(item =>
+      `<div class="calendar-item ${item.status}" title="${item.title || 'Listing'}">${truncate(item.title || 'Listing', 18)}</div>`
+    ).join('');
+
+    const moreHtml = d.items.length > 3 ? `<div class="calendar-item" style="color:var(--text-muted)">+${d.items.length - 3} more</div>` : '';
+
+    return `<div class="${classes.join(' ')}" onclick="showDayDetail('${d.date}')">
+      <div class="calendar-day-num">${d.day}</div>
+      ${itemsHtml}${moreHtml}
+    </div>`;
+  }).join('');
+
+  grid.innerHTML = html;
+}
+
+function changeCalendarMonth(delta) {
+  calendarMonth += delta;
+  if (calendarMonth > 11) { calendarMonth = 0; calendarYear++; }
+  if (calendarMonth < 0) { calendarMonth = 11; calendarYear--; }
+  renderCalendar();
+}
+
+function showDayDetail(dateStr) {
+  const items = Scheduler.getItemsForDate(dateStr);
+  const d = new Date(dateStr + 'T12:00:00');
+  const dateLabel = d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+
+  let html = '';
+  if (items.length === 0) {
+    html = `<p class="empty-state">No listings scheduled for this day.</p>
+      <button class="btn btn-primary" onclick="closeModal(); showScheduleModal('${dateStr}')">Schedule a Listing</button>`;
+  } else {
+    html = items.map(item => {
+      const time = new Date(item.publishAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+      return `<div class="queue-item">
+        <div class="queue-item-info">
+          <h4>${item.title || 'Untitled Listing'}</h4>
+          <p>${time} &middot; ${item.status}</p>
+        </div>
+        <div class="queue-item-actions">
+          ${item.status === 'scheduled' ? `<button class="btn btn-sm btn-outline" onclick="cancelScheduleItem('${item.id}')">Cancel</button>` : ''}
+          <button class="btn btn-sm btn-outline" onclick="removeScheduleItem('${item.id}')">Remove</button>
+        </div>
+      </div>`;
+    }).join('');
+    html += `<div style="margin-top:12px;">
+      <button class="btn btn-primary" onclick="closeModal(); showScheduleModal('${dateStr}')">+ Add Another</button>
+    </div>`;
+  }
+
+  showModal(dateLabel, html);
+}
+
+function renderScheduleQueue() {
+  const queueEl = document.getElementById('schedule-queue');
+  const items = Scheduler.getScheduledItems();
+
+  if (items.length === 0) {
+    queueEl.innerHTML = '<p class="empty-state">No scheduled listings. Click "Schedule Listing" to get started.</p>';
+    return;
+  }
+
+  queueEl.innerHTML = items.map(item => {
+    const d = new Date(item.publishAt);
+    const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const timeStr = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    const relative = getRelativeTime(d);
+
+    return `<div class="queue-item">
+      <div class="queue-item-info">
+        <h4>${item.title || 'Untitled Listing'}</h4>
+        <p>${item.category || 'digital-paper'} &middot; $${item.price || '0.00'}${item.batchId ? ` &middot; Batch ${item.batchId}` : ''}</p>
+      </div>
+      <div class="queue-item-time">${dateStr} ${timeStr}<br><small style="color:var(--text-muted)">${relative}</small></div>
+      <div class="queue-item-actions">
+        <button class="btn btn-sm btn-outline" onclick="editScheduleItem('${item.id}')">Edit</button>
+        <button class="btn btn-sm btn-outline" onclick="publishNow('${item.id}')">Publish Now</button>
+        <button class="btn btn-sm btn-outline" style="color:var(--coral)" onclick="cancelScheduleItem('${item.id}')">Cancel</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderPublishedHistory() {
+  const histEl = document.getElementById('published-history');
+  const items = Scheduler.getPublishedItems();
+
+  if (items.length === 0) {
+    histEl.innerHTML = '<p class="empty-state">No published listings yet.</p>';
+    return;
+  }
+
+  histEl.innerHTML = items.slice(0, 20).map(item => {
+    const d = new Date(item.publishedAt || item.publishAt);
+    const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return `<div class="queue-item">
+      <div class="queue-item-info">
+        <h4>${item.title || 'Untitled Listing'}</h4>
+        <p>Published ${dateStr}${item.listingId ? ` &middot; #${item.listingId}` : ''}</p>
+      </div>
+      <span class="badge" style="background:var(--green-bg);color:var(--green);">Published</span>
+    </div>`;
+  }).join('');
+}
+
+function showScheduleModal(prefillDate) {
+  const schedSettings = Scheduler.getSettings();
+  const defaultDate = prefillDate || new Date().toISOString().slice(0, 10);
+  const defaultTime = schedSettings.defaultTime || '10:00';
+
+  // Build listing options from synced listings (drafts) and pipeline items
+  const draftOptions = listings.filter(l => l.state === 'draft').map(l =>
+    `<option value="existing:${l.listing_id}">${truncate(l.title, 50)} (Draft #${l.listing_id})</option>`
+  ).join('');
+
+  const pipelineOptions = Products.getPipeline().filter(p => p.stage === 'ready').map(p =>
+    `<option value="pipeline:${p.id}">${truncate(p.name, 50)} (Pipeline)</option>`
+  ).join('');
+
+  const html = `
+    <div class="form-group">
+      <label>Listing Source</label>
+      <select id="sched-source" onchange="toggleScheduleSource()">
+        <option value="new">Create New Draft Listing</option>
+        ${draftOptions ? '<optgroup label="Existing Drafts">' + draftOptions + '</optgroup>' : ''}
+        ${pipelineOptions ? '<optgroup label="Pipeline - Ready">' + pipelineOptions + '</optgroup>' : ''}
+      </select>
+    </div>
+    <div id="sched-new-fields">
+      <div class="form-group">
+        <label>Title</label>
+        <input type="text" id="sched-title" placeholder="e.g., Vintage Damask Digital Paper - Rose Gold - 10 Pack">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Category</label>
+          <select id="sched-category">
+            <option value="digital-paper">Digital Paper</option>
+            <option value="junk-journal">Junk Journal Kit</option>
+            <option value="journal-pages">Journal Pages</option>
+            <option value="ephemera">Ephemera Pack</option>
+            <option value="stickers">Stickers</option>
+            <option value="calendar">Calendar</option>
+            <option value="art-prints">Art Prints</option>
+            <option value="coloring">Coloring Pages</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Price ($)</label>
+          <input type="number" id="sched-price" step="0.01" min="0.20" value="3.79">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Tags (comma-separated, max 13)</label>
+        <input type="text" id="sched-tags" placeholder="digital paper, printable, junk journal, vintage, damask">
+      </div>
+      <div class="form-group">
+        <label>Description</label>
+        <textarea id="sched-desc" rows="4" placeholder="Listing description..."></textarea>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Publish Date</label>
+        <input type="date" id="sched-date" value="${defaultDate}">
+      </div>
+      <div class="form-group">
+        <label>Publish Time</label>
+        <input type="time" id="sched-time" value="${defaultTime}">
+      </div>
+    </div>
+    <div class="form-actions" style="margin-top:16px;">
+      <button class="btn btn-primary" onclick="addToSchedule()">Add to Schedule</button>
+      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+    </div>
+  `;
+
+  showModal('Schedule a Listing', html);
+}
+
+function toggleScheduleSource() {
+  const source = document.getElementById('sched-source').value;
+  document.getElementById('sched-new-fields').style.display = source === 'new' ? '' : 'none';
+}
+
+function addToSchedule() {
+  const source = document.getElementById('sched-source').value;
+  const date = document.getElementById('sched-date').value;
+  const time = document.getElementById('sched-time').value;
+
+  if (!date || !time) {
+    toast('Please set a date and time.', 'error');
+    return;
+  }
+
+  const publishAt = new Date(`${date}T${time}:00`).toISOString();
+  let item = { publishAt };
+
+  if (source === 'new') {
+    item.title = document.getElementById('sched-title').value.trim();
+    item.category = document.getElementById('sched-category').value;
+    item.price = document.getElementById('sched-price').value;
+    item.tags = document.getElementById('sched-tags').value;
+    item.description = document.getElementById('sched-desc').value;
+    item.sourceType = 'new';
+
+    if (!item.title) {
+      toast('Please enter a listing title.', 'error');
+      return;
+    }
+
+    item.draftData = {
+      title: item.title,
+      description: item.description,
+      price: Math.round(parseFloat(item.price) * 100) / 100,
+      tags: item.tags.split(',').map(t => t.trim()).filter(Boolean).slice(0, 13),
+      who_made: 'i_did',
+      when_made: 'made_to_order',
+      taxonomy_id: 2078, // Craft Supplies & Tools > Paper & Party Supplies
+      quantity: 999,
+      type: 'download',
+    };
+  } else if (source.startsWith('existing:')) {
+    const listingId = source.split(':')[1];
+    const listing = listings.find(l => String(l.listing_id) === listingId);
+    item.listingId = listingId;
+    item.title = listing?.title || `Listing #${listingId}`;
+    item.sourceType = 'existing';
+  } else if (source.startsWith('pipeline:')) {
+    const pipelineId = source.split(':')[1];
+    const pipeItem = Products.getPipeline().find(p => p.id === pipelineId);
+    item.title = pipeItem?.name || 'Pipeline Item';
+    item.pipelineId = pipelineId;
+    item.sourceType = 'pipeline';
+  }
+
+  Scheduler.addScheduledItem(item);
+  closeModal();
+  renderCalendar();
+  renderScheduleQueue();
+  updateScheduleStats();
+  toast(`Scheduled: "${item.title}" for ${new Date(publishAt).toLocaleDateString()}`, 'success');
+}
+
+function showBatchModal() {
+  const schedSettings = Scheduler.getSettings();
+  const defaultDate = new Date().toISOString().slice(0, 10);
+
+  const html = `
+    <p style="margin-bottom:16px;color:var(--text-muted);">Schedule multiple listings to publish over several days. Add listing titles below (one per line), and they'll be spaced evenly starting from the chosen date.</p>
+    <div class="form-group">
+      <label>Listing Titles (one per line)</label>
+      <textarea id="batch-titles" rows="8" placeholder="Vintage Damask - Rose Gold - 10 Pack
+Vintage Damask - Sapphire Blue - 10 Pack
+Vintage Damask - Emerald Green - 10 Pack
+Vintage Damask - Amethyst Purple - 10 Pack"></textarea>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Category</label>
+        <select id="batch-category">
+          <option value="digital-paper">Digital Paper</option>
+          <option value="junk-journal">Junk Journal Kit</option>
+          <option value="journal-pages">Journal Pages</option>
+          <option value="ephemera">Ephemera Pack</option>
+          <option value="stickers">Stickers</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Price ($)</label>
+        <input type="number" id="batch-price" step="0.01" min="0.20" value="3.79">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Start Date</label>
+        <input type="date" id="batch-start" value="${defaultDate}">
+      </div>
+      <div class="form-group">
+        <label>Days Between Listings</label>
+        <input type="number" id="batch-gap" min="1" max="30" value="${schedSettings.batchGap || 1}">
+      </div>
+      <div class="form-group">
+        <label>Publish Time</label>
+        <input type="time" id="batch-time" value="${schedSettings.defaultTime || '10:00'}">
+      </div>
+    </div>
+    <div id="batch-preview" style="margin:12px 0;"></div>
+    <div class="form-actions">
+      <button class="btn btn-outline" onclick="previewBatch()">Preview Schedule</button>
+      <button class="btn btn-primary" onclick="submitBatch()">Schedule All</button>
+      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+    </div>
+  `;
+
+  showModal('Batch Schedule', html);
+}
+
+function previewBatch() {
+  const titles = document.getElementById('batch-titles').value.split('\n').map(t => t.trim()).filter(Boolean);
+  const start = document.getElementById('batch-start').value;
+  const gap = parseInt(document.getElementById('batch-gap').value) || 1;
+  const time = document.getElementById('batch-time').value || '10:00';
+
+  if (titles.length === 0) {
+    toast('Enter at least one listing title.', 'error');
+    return;
+  }
+
+  const previewEl = document.getElementById('batch-preview');
+  const startDate = new Date(start);
+
+  previewEl.innerHTML = '<h4 style="margin-bottom:8px;">Preview:</h4>' +
+    titles.map((title, i) => {
+      const pubDate = new Date(startDate);
+      pubDate.setDate(pubDate.getDate() + (i * gap));
+      return `<div style="padding:4px 0;font-size:0.8rem;">
+        <span style="color:var(--gold)">${pubDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} ${time}</span>
+        &mdash; ${title}
+      </div>`;
+    }).join('');
+}
+
+function submitBatch() {
+  const titles = document.getElementById('batch-titles').value.split('\n').map(t => t.trim()).filter(Boolean);
+  const category = document.getElementById('batch-category').value;
+  const price = document.getElementById('batch-price').value;
+  const start = document.getElementById('batch-start').value;
+  const gap = parseInt(document.getElementById('batch-gap').value) || 1;
+  const time = document.getElementById('batch-time').value || '10:00';
+
+  if (titles.length === 0) {
+    toast('Enter at least one listing title.', 'error');
+    return;
+  }
+
+  const items = titles.map(title => ({
+    title,
+    category,
+    price,
+    sourceType: 'new',
+    draftData: {
+      title,
+      who_made: 'i_did',
+      when_made: 'made_to_order',
+      taxonomy_id: 2078,
+      quantity: 999,
+      price: Math.round(parseFloat(price) * 100) / 100,
+      type: 'download',
+    },
+  }));
+
+  Scheduler.batchSchedule(items, start, gap, time);
+  closeModal();
+  renderCalendar();
+  renderScheduleQueue();
+  updateScheduleStats();
+  toast(`Batch scheduled: ${items.length} listings over ${items.length * gap} days`, 'success');
+}
+
+function cancelScheduleItem(id) {
+  Scheduler.cancelScheduledItem(id);
+  renderCalendar();
+  renderScheduleQueue();
+  updateScheduleStats();
+  toast('Listing cancelled.', 'info');
+}
+
+function removeScheduleItem(id) {
+  Scheduler.removeScheduledItem(id);
+  renderCalendar();
+  renderScheduleQueue();
+  renderPublishedHistory();
+  updateScheduleStats();
+  toast('Removed from schedule.', 'info');
+}
+
+function editScheduleItem(id) {
+  const item = Scheduler.getSchedule().find(s => s.id === id);
+  if (!item) return;
+
+  const d = new Date(item.publishAt);
+  const dateStr = d.toISOString().slice(0, 10);
+  const timeStr = d.toTimeString().slice(0, 5);
+
+  const html = `
+    <div class="form-group">
+      <label>Title</label>
+      <input type="text" id="edit-sched-title" value="${item.title || ''}">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Date</label>
+        <input type="date" id="edit-sched-date" value="${dateStr}">
+      </div>
+      <div class="form-group">
+        <label>Time</label>
+        <input type="time" id="edit-sched-time" value="${timeStr}">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Price ($)</label>
+        <input type="number" id="edit-sched-price" step="0.01" value="${item.price || '3.79'}">
+      </div>
+      <div class="form-group">
+        <label>Tags</label>
+        <input type="text" id="edit-sched-tags" value="${item.tags || ''}">
+      </div>
+    </div>
+    <div class="form-actions" style="margin-top:16px;">
+      <button class="btn btn-primary" onclick="saveScheduleEdit('${id}')">Save Changes</button>
+      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+    </div>
+  `;
+
+  showModal('Edit Scheduled Listing', html);
+}
+
+function saveScheduleEdit(id) {
+  const title = document.getElementById('edit-sched-title').value.trim();
+  const date = document.getElementById('edit-sched-date').value;
+  const time = document.getElementById('edit-sched-time').value;
+  const price = document.getElementById('edit-sched-price').value;
+  const tags = document.getElementById('edit-sched-tags').value;
+
+  const publishAt = new Date(`${date}T${time}:00`).toISOString();
+  Scheduler.updateScheduledItem(id, { title, publishAt, price, tags });
+
+  closeModal();
+  renderCalendar();
+  renderScheduleQueue();
+  updateScheduleStats();
+  toast('Schedule updated.', 'success');
+}
+
+async function publishNow(id) {
+  const item = Scheduler.getSchedule().find(s => s.id === id);
+  if (!item) return;
+
+  if (!EtsyAPI.isConnected()) {
+    toast('Connect to Etsy first to publish listings.', 'error');
+    return;
+  }
+
+  try {
+    toast(`Publishing "${item.title}"...`, 'info');
+    const settings = EtsyAPI.getSettings();
+    const shopId = settings.shopId;
+
+    if (!shopId) {
+      toast('No shop ID. Sync your shop first.', 'error');
+      return;
+    }
+
+    if (item.sourceType === 'existing' && item.listingId) {
+      // Activate existing draft
+      await EtsyAPI.updateListing(shopId, item.listingId, { state: 'active' });
+    } else if (item.draftData) {
+      // Create draft then activate
+      const draft = await EtsyAPI.createDraftListing(shopId, item.draftData);
+      item.listingId = draft.listing_id;
+      // Note: can't activate without images, mark as draft-created
+      toast(`Draft created: #${draft.listing_id}. Add images to publish.`, 'info');
+    }
+
+    Scheduler.updateScheduledItem(id, {
+      status: 'published',
+      publishedAt: new Date().toISOString(),
+      listingId: item.listingId,
+    });
+
+    renderCalendar();
+    renderScheduleQueue();
+    renderPublishedHistory();
+    updateScheduleStats();
+    toast(`Published: "${item.title}"`, 'success');
+  } catch (e) {
+    Scheduler.updateScheduledItem(id, { status: 'failed', error: e.message });
+    renderScheduleQueue();
+    updateScheduleStats();
+    toast(`Publish failed: ${e.message}`, 'error');
+  }
+}
+
+function saveSchedulerSettings() {
+  const settings = {
+    defaultTime: document.getElementById('sched-default-time').value,
+    batchGap: parseInt(document.getElementById('sched-batch-gap').value) || 1,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  };
+  Scheduler.saveSettings(settings);
+  toast('Scheduler settings saved.', 'success');
+}
+
+function getRelativeTime(date) {
+  const now = new Date();
+  const diff = date - now;
+  const absDiff = Math.abs(diff);
+  const isPast = diff < 0;
+
+  if (absDiff < 60000) return isPast ? 'just now' : 'in < 1 min';
+  if (absDiff < 3600000) {
+    const mins = Math.round(absDiff / 60000);
+    return isPast ? `${mins}m ago` : `in ${mins}m`;
+  }
+  if (absDiff < 86400000) {
+    const hrs = Math.round(absDiff / 3600000);
+    return isPast ? `${hrs}h ago` : `in ${hrs}h`;
+  }
+  const days = Math.round(absDiff / 86400000);
+  return isPast ? `${days}d ago` : `in ${days}d`;
 }
 
 // --- Utilities ---
