@@ -31,6 +31,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initScheduler();
   initGenerator();
   initPalette();
+  initMockups();
 
   // Set redirect URI display
   const redirectUri = EtsyAPI.getRedirectUri();
@@ -75,7 +76,8 @@ function switchView(view) {
   const titles = {
     dashboard: 'Dashboard', listings: 'My Listings', pipeline: 'Pipeline',
     create: 'Create Product', edits: 'Edit Requests', generator: 'Pattern Generator',
-    palette: 'Color Palettes', scheduler: 'Listing Scheduler', marketing: 'Marketing',
+    palette: 'Color Palettes', mockups: 'Mockup Generator',
+    scheduler: 'Listing Scheduler', marketing: 'Marketing',
     analytics: 'Sales & Analytics', settings: 'Settings'
   };
   document.getElementById('page-title').textContent = titles[view] || view;
@@ -1624,6 +1626,291 @@ function scheduleVariations() {
       ).join('\n');
     }
   }, 100);
+}
+
+// --- Mockup Generator ---
+let mockTemplates = [];
+let selectedMockTemplate = 'journal-cover';
+
+const FALLBACK_MOCK_TEMPLATES = [
+  { id: 'journal-cover', name: 'Journal Cover', description: 'Pattern on a hardcover journal', category: 'journal' },
+  { id: 'journal-spread', name: 'Journal Open Spread', description: 'Two-page spread', category: 'journal' },
+  { id: 'planner-cover', name: 'Planner Cover', description: 'Spiral-bound planner', category: 'planner' },
+  { id: 'scrapbook-page', name: 'Scrapbook Page', description: 'Scrapbook layout background', category: 'scrapbook' },
+  { id: 'flat-lay', name: 'Flat Lay Scene', description: 'Styled flat-lay with craft supplies', category: 'lifestyle' },
+  { id: 'card-making', name: 'Greeting Card', description: 'Card front on craft surface', category: 'card' },
+  { id: 'digital-preview', name: 'Digital Preview Grid', description: '4-up seamless tile preview', category: 'preview' },
+  { id: 'listing-hero', name: 'Etsy Listing Hero', description: 'Clean product shot for thumbnail', category: 'listing' },
+];
+
+const MOCK_CATEGORY_ICONS = {
+  journal: '&#128214;', planner: '&#128203;', scrapbook: '&#9986;',
+  lifestyle: '&#127912;', card: '&#128140;', preview: '&#128444;', listing: '&#127979;',
+};
+
+async function initMockups() {
+  try {
+    const resp = await fetch(`${GEN_API}/mockup-templates`);
+    if (resp.ok) {
+      const data = await resp.json();
+      mockTemplates = data.templates;
+    } else throw new Error();
+  } catch {
+    mockTemplates = FALLBACK_MOCK_TEMPLATES;
+  }
+
+  renderMockupTemplateGrid();
+  loadMockupSourceAssets();
+}
+
+function renderMockupTemplateGrid() {
+  const grid = document.getElementById('mockup-template-grid');
+  if (!grid) return;
+
+  grid.innerHTML = mockTemplates.map(t => `
+    <div class="mock-template-card ${t.id === selectedMockTemplate ? 'selected' : ''}"
+         onclick="selectMockTemplate('${t.id}')">
+      <span class="mock-template-icon">${MOCK_CATEGORY_ICONS[t.category] || '&#128247;'}</span>
+      <div class="mock-template-info">
+        <div class="mock-template-name">${t.name}</div>
+        <div class="mock-template-desc">${t.description}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function selectMockTemplate(id) {
+  selectedMockTemplate = id;
+  renderMockupTemplateGrid();
+}
+
+async function loadMockupSourceAssets() {
+  const select = document.getElementById('mock-source');
+  if (!select) return;
+
+  try {
+    const resp = await fetch(`${GEN_API}/source-assets`);
+    if (resp.ok) {
+      const data = await resp.json();
+      select.innerHTML = '<option value="">-- Select a pattern --</option>' +
+        data.assets.map(a => `<option value="${a.path}">${a.relativePath}</option>`).join('');
+    } else throw new Error();
+  } catch {
+    select.innerHTML = '<option value="">Server offline</option>';
+  }
+}
+
+function updateMockupSourcePreview() {
+  const select = document.getElementById('mock-source');
+  const preview = document.getElementById('mock-source-preview');
+  if (!select || !preview) return;
+
+  const srcPath = select.value;
+  if (srcPath) {
+    const relativePath = srcPath.replace(/\\/g, '/').split('source-assets/')[1] || '';
+    preview.innerHTML = `<img src="${GEN_API.replace('/api', '')}/source-assets/${relativePath}" alt="Source" class="pal-source-img">`;
+  } else {
+    preview.innerHTML = '';
+  }
+}
+
+async function previewMockup() {
+  const srcPath = document.getElementById('mock-source')?.value;
+  if (!srcPath) { toast('Select a pattern first.', 'error'); return; }
+
+  const results = document.getElementById('mock-results');
+  results.innerHTML = '<p style="color:var(--text-muted)">Generating preview...</p>';
+
+  try {
+    const resp = await fetch(`${GEN_API}/mockup-preview`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ patternPath: srcPath, template: selectedMockTemplate }),
+    });
+
+    if (!resp.ok) throw new Error(await resp.text());
+    const blob = await resp.blob();
+    const url = URL.createObjectURL(blob);
+    results.innerHTML = `
+      <img src="${url}" alt="Mockup Preview" class="mock-preview-img" onclick="window.open('${url}', '_blank')">
+      <p style="font-size:0.75rem;color:var(--text-muted);margin-top:8px;">
+        ${mockTemplates.find(t => t.id === selectedMockTemplate)?.name || selectedMockTemplate} — preview (reduced size)
+      </p>`;
+  } catch (e) {
+    results.innerHTML = `<p style="color:var(--coral)">Preview failed: ${e.message}</p>`;
+  }
+}
+
+async function generateSingleMockup() {
+  const srcPath = document.getElementById('mock-source')?.value;
+  if (!srcPath) { toast('Select a pattern first.', 'error'); return; }
+  const baseName = document.getElementById('mock-name')?.value?.trim() || undefined;
+
+  const progress = document.getElementById('mock-progress');
+  const progressFill = document.getElementById('mock-progress-fill');
+  const progressText = document.getElementById('mock-progress-text');
+
+  progress.style.display = '';
+  progressFill.style.width = '30%';
+  progressText.textContent = `Generating ${mockTemplates.find(t => t.id === selectedMockTemplate)?.name || selectedMockTemplate} mockup...`;
+
+  try {
+    const resp = await fetch(`${GEN_API}/mockup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ patternPath: srcPath, template: selectedMockTemplate, baseName }),
+    });
+
+    progressFill.style.width = '90%';
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+
+    progressFill.style.width = '100%';
+    progressText.textContent = 'Done!';
+
+    showMockupResult(data.result);
+    toast('Mockup generated!', 'success');
+  } catch (e) {
+    progressText.textContent = `Error: ${e.message}`;
+    progressFill.style.background = 'var(--coral)';
+    toast(`Mockup failed: ${e.message}`, 'error');
+  }
+
+  setTimeout(() => { progress.style.display = 'none'; progressFill.style.width = '0%'; progressFill.style.background = ''; }, 5000);
+}
+
+async function generateAllMockupsUI() {
+  const srcPath = document.getElementById('mock-source')?.value;
+  if (!srcPath) { toast('Select a pattern first.', 'error'); return; }
+  const baseName = document.getElementById('mock-name')?.value?.trim() || undefined;
+
+  const progress = document.getElementById('mock-progress');
+  const progressFill = document.getElementById('mock-progress-fill');
+  const progressText = document.getElementById('mock-progress-text');
+
+  progress.style.display = '';
+  progressFill.style.width = '10%';
+  progressText.textContent = `Generating all ${mockTemplates.length} mockup styles...`;
+
+  try {
+    const resp = await fetch(`${GEN_API}/mockup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ patternPath: srcPath, template: 'all', baseName }),
+    });
+
+    progressFill.style.width = '90%';
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+
+    progressFill.style.width = '100%';
+    const successCount = data.result.mockups.filter(m => !m.error).length;
+    progressText.textContent = `Done! ${successCount}/${mockTemplates.length} mockups generated.`;
+
+    showMockupResults(data.result.mockups);
+    toast(`${successCount} mockups generated!`, 'success');
+  } catch (e) {
+    progressText.textContent = `Error: ${e.message}`;
+    progressFill.style.background = 'var(--coral)';
+    toast(`Generation failed: ${e.message}`, 'error');
+  }
+
+  setTimeout(() => { progress.style.display = 'none'; progressFill.style.width = '0%'; progressFill.style.background = ''; }, 5000);
+}
+
+function showMockupResult(result) {
+  const el = document.getElementById('mock-results');
+  if (!el) return;
+
+  const serverBase = GEN_API.replace('/api', '');
+  const relativePath = result.file?.replace(/\\/g, '/').split('Journaling4Joy/')[1] || '';
+  const imageUrl = `${serverBase}/${relativePath}`;
+
+  el.innerHTML = `
+    <div class="mock-result">
+      <img src="${imageUrl}" alt="Mockup" class="mock-preview-img" onclick="window.open('${imageUrl}', '_blank')">
+      <p style="font-size:0.8rem;color:var(--text-muted);margin-top:8px;">
+        ${result.template} — ${(result.size / 1024 / 1024).toFixed(1)}MB
+        <button class="btn btn-sm btn-outline" style="margin-left:8px;" onclick="window.open('${imageUrl}', '_blank')">Full Size</button>
+      </p>
+    </div>`;
+}
+
+function showMockupResults(mockups) {
+  const el = document.getElementById('mock-results');
+  if (!el) return;
+
+  const serverBase = GEN_API.replace('/api', '');
+  el.innerHTML = '<div class="mock-results-grid">' +
+    mockups.filter(m => !m.error).map(m => {
+      const relativePath = m.file?.replace(/\\/g, '/').split('Journaling4Joy/')[1] || '';
+      const imageUrl = `${serverBase}/${relativePath}`;
+      return `<div class="mock-result-card">
+        <img src="${imageUrl}" alt="${m.templateName}" class="mock-result-thumb" onclick="window.open('${imageUrl}', '_blank')">
+        <div class="mock-result-label">${m.templateName}</div>
+      </div>`;
+    }).join('') +
+    '</div>';
+}
+
+function showBatchMockupModal() {
+  const html = `
+    <p style="margin-bottom:16px;color:var(--text-muted);">Generate mockups for all color variations in a folder. Select the folder containing your variations.</p>
+    <div class="form-group">
+      <label>Variations Folder Path</label>
+      <input type="text" id="batch-mock-dir" placeholder="e.g., C:\\Users\\chris\\Journaling4Joy\\source-assets\\Damask\\variations">
+    </div>
+    <div class="form-group">
+      <label>Mockup Template</label>
+      <select id="batch-mock-template">
+        ${mockTemplates.map(t => `<option value="${t.id}" ${t.id === 'listing-hero' ? 'selected' : ''}>${t.name}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-actions" style="margin-top:16px;">
+      <button class="btn btn-primary" onclick="startBatchMockups()">Generate Batch</button>
+      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+    </div>
+  `;
+  showModal('Batch Mockup Generation', html);
+}
+
+async function startBatchMockups() {
+  const inputDir = document.getElementById('batch-mock-dir')?.value?.trim();
+  const templateId = document.getElementById('batch-mock-template')?.value || 'listing-hero';
+
+  if (!inputDir) { toast('Enter a folder path.', 'error'); return; }
+  closeModal();
+
+  const progress = document.getElementById('mock-progress');
+  const progressFill = document.getElementById('mock-progress-fill');
+  const progressText = document.getElementById('mock-progress-text');
+
+  progress.style.display = '';
+  progressFill.style.width = '20%';
+  progressText.textContent = 'Generating batch mockups...';
+
+  try {
+    const resp = await fetch(`${GEN_API}/mockup-batch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ inputDir, template: templateId }),
+    });
+
+    progressFill.style.width = '90%';
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+
+    progressFill.style.width = '100%';
+    const successCount = data.result.results.filter(r => !r.error).length;
+    progressText.textContent = `Done! ${successCount} mockups from batch.`;
+    toast(`Batch complete: ${successCount} mockups generated!`, 'success');
+  } catch (e) {
+    progressText.textContent = `Error: ${e.message}`;
+    progressFill.style.background = 'var(--coral)';
+    toast(`Batch failed: ${e.message}`, 'error');
+  }
+
+  setTimeout(() => { progress.style.display = 'none'; progressFill.style.width = '0%'; progressFill.style.background = ''; }, 5000);
 }
 
 // --- Scheduler ---

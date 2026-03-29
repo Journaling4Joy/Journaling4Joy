@@ -15,6 +15,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { generatePattern, batchGenerate, STYLE_PRESETS, COLOR_PALETTES } from './pattern-generator.js';
 import { generateVariations, generatePreviewStrip, COLORS, PALETTES, METHODS, selectMethod } from './color-engine.js';
+import { TEMPLATES, generateMockup, generateAllMockups, batchMockups } from './mockup-engine.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.J4J_PORT || 4444;
@@ -202,6 +203,68 @@ const routes = {
     }
     scanDir(assetsDir);
     sendJson(res, { assets });
+  },
+
+  'GET /api/mockup-templates': (req, res) => {
+    sendJson(res, {
+      templates: Object.entries(TEMPLATES).map(([key, val]) => ({
+        id: key,
+        name: val.name,
+        description: val.description,
+        category: val.category,
+        canvasWidth: val.canvasWidth,
+        canvasHeight: val.canvasHeight,
+      })),
+    });
+  },
+
+  'POST /api/mockup': async (req, res) => {
+    const body = await readBody(req);
+    const { patternPath, template: templateId, outputDir, baseName } = body;
+
+    try {
+      if (templateId === 'all') {
+        const result = await generateAllMockups(patternPath, { outputDir, baseName });
+        sendJson(res, { success: true, result });
+      } else {
+        const mockup = await generateMockup(patternPath, templateId || 'journal-cover');
+        const name = baseName || path.basename(patternPath, path.extname(patternPath));
+        const outDir = outputDir || path.join(path.dirname(patternPath), 'mockups');
+        if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+        const outPath = path.join(outDir, `${name}-mockup-${templateId}.jpg`);
+        fs.writeFileSync(outPath, mockup);
+        sendJson(res, { success: true, result: { file: outPath, template: templateId, size: mockup.length } });
+      }
+    } catch (e) {
+      sendError(res, e.message);
+    }
+  },
+
+  'POST /api/mockup-batch': async (req, res) => {
+    const body = await readBody(req);
+    const { inputDir, template: templateId, outputDir } = body;
+
+    try {
+      const result = await batchMockups(inputDir, templateId || 'journal-cover', { outputDir });
+      sendJson(res, { success: true, result });
+    } catch (e) {
+      sendError(res, e.message);
+    }
+  },
+
+  'POST /api/mockup-preview': async (req, res) => {
+    const body = await readBody(req);
+    const { patternPath, template: templateId } = body;
+
+    try {
+      const mockup = await generateMockup(patternPath, templateId || 'journal-cover');
+      // Return smaller preview
+      const preview = await sharp(mockup).resize(800, null, { fit: 'inside' }).jpeg({ quality: 80 }).toBuffer();
+      res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Access-Control-Allow-Origin': '*' });
+      res.end(preview);
+    } catch (e) {
+      sendError(res, e.message);
+    }
   },
 
   'GET /api/health': (req, res) => {

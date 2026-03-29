@@ -41,6 +41,9 @@
         <a href="#" data-view="palette" class="nav-link">
           <span class="nav-icon">&#127752;</span> Color Palettes
         </a>
+        <a href="#" data-view="mockups" class="nav-link">
+          <span class="nav-icon">&#128247;</span> Mockups
+        </a>
         <a href="#" data-view="scheduler" class="nav-link">
           <span class="nav-icon">&#128197;</span> Scheduler
         </a>
@@ -575,6 +578,69 @@
           </div>
           <div class="panel-body">
             <div class="variations-grid" id="pal-results-grid"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========== MOCKUP GENERATOR VIEW ========== -->
+      <section id="view-mockups" class="view">
+        <div class="view-header">
+          <h2>Mockup Generator</h2>
+          <p class="view-subtitle">Create journal & planner mockups for your listings</p>
+        </div>
+
+        <div class="create-grid">
+          <!-- Pattern Selection -->
+          <div class="panel">
+            <div class="panel-header"><h3>1. Select Pattern</h3></div>
+            <div class="panel-body">
+              <div class="form-group">
+                <label>Source Pattern</label>
+                <select id="mock-source" onchange="updateMockupSourcePreview()">
+                  <option value="">-- Loading... --</option>
+                </select>
+              </div>
+              <div id="mock-source-preview" class="pal-source-preview"></div>
+            </div>
+          </div>
+
+          <!-- Template Selection -->
+          <div class="panel">
+            <div class="panel-header"><h3>2. Choose Mockup Style</h3></div>
+            <div class="panel-body">
+              <div class="mockup-template-grid" id="mockup-template-grid"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Preview & Generate -->
+        <div class="panel">
+          <div class="panel-header">
+            <h3>3. Generate</h3>
+          </div>
+          <div class="panel-body">
+            <div class="form-row">
+              <div class="form-group">
+                <label>Output Name</label>
+                <input type="text" id="mock-name" placeholder="Auto-generated from pattern name">
+              </div>
+            </div>
+            <div class="form-actions">
+              <button class="btn btn-primary" onclick="generateSingleMockup()">Generate Selected Mockup</button>
+              <button class="btn btn-accent" onclick="generateAllMockupsUI()">Generate All Mockup Styles</button>
+              <button class="btn btn-outline" onclick="showBatchMockupModal()">Batch (All Variations)</button>
+              <button class="btn btn-outline" onclick="previewMockup()">Quick Preview</button>
+            </div>
+
+            <div id="mock-progress" style="display:none; margin-top:16px;">
+              <div class="gen-progress-bar">
+                <div class="gen-progress-fill" id="mock-progress-fill"></div>
+              </div>
+              <p id="mock-progress-text" style="font-size:0.8rem;color:var(--text-muted);margin-top:4px;">Generating...</p>
+            </div>
+
+            <!-- Preview / Results -->
+            <div id="mock-results" style="margin-top:16px;"></div>
           </div>
         </div>
       </section>
