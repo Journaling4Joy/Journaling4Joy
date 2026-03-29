@@ -30,6 +30,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   populateProductSelects();
   initScheduler();
   initGenerator();
+  initPalette();
 
   // Set redirect URI display
   const redirectUri = EtsyAPI.getRedirectUri();
@@ -74,7 +75,7 @@ function switchView(view) {
   const titles = {
     dashboard: 'Dashboard', listings: 'My Listings', pipeline: 'Pipeline',
     create: 'Create Product', edits: 'Edit Requests', generator: 'Pattern Generator',
-    scheduler: 'Listing Scheduler', marketing: 'Marketing',
+    palette: 'Color Palettes', scheduler: 'Listing Scheduler', marketing: 'Marketing',
     analytics: 'Sales & Analytics', settings: 'Settings'
   };
   document.getElementById('page-title').textContent = titles[view] || view;
@@ -1347,6 +1348,282 @@ async function saveGeneratorKeys() {
   } catch {
     toast('Server offline. Start it first: cd backend && npm run server', 'error');
   }
+}
+
+// --- Color Palette Engine ---
+let palSelectedPalette = 'metallics';
+let palSelectedColors = [];
+let palSourcePath = '';
+let palPalettes = {};
+let palColors = {};
+let palLastResults = null;
+
+const PAL_FALLBACK_PALETTES = {
+  metallics: { name: 'Metallics Collection', colors: ['gold', 'rose-gold', 'silver', 'amethyst', 'sapphire', 'emerald', 'ruby', 'opal', 'cotton-candy', 'black'] },
+  'metallics-core': { name: 'Metallics Core', colors: ['gold', 'rose-gold', 'silver', 'amethyst', 'sapphire'] },
+  jewel: { name: 'Jewel Tones', colors: ['amethyst', 'sapphire', 'emerald', 'ruby', 'teal', 'burgundy'] },
+  earth: { name: 'Earth Tones', colors: ['brown', 'cream', 'dusty-rose', 'sage', 'opal', 'steel-gray'] },
+  pastels: { name: 'Soft Pastels', colors: ['cotton-candy', 'dusty-rose', 'cream', 'opal', 'sage'] },
+  dark: { name: 'Dark & Moody', colors: ['black', 'navy', 'burgundy', 'steel-gray', 'brown'] },
+  'j4j-damask': { name: 'J4J Damask (Match Shop)', colors: ['sapphire', 'brown', 'cream', 'emerald', 'gold', 'amethyst', 'ruby', 'dusty-rose'] },
+};
+
+const PAL_FALLBACK_COLORS = {
+  'rose-gold': '#B76E79', gold: '#D4AF37', silver: '#C0C0C0', amethyst: '#9966CC',
+  sapphire: '#0F52BA', emerald: '#50C878', ruby: '#E0115F', opal: '#A8C3BC',
+  'cotton-candy': '#FFBCD9', black: '#1C1C1C', 'steel-gray': '#71797E', cream: '#FFFDD0',
+  brown: '#8B4513', 'dusty-rose': '#DCAE96', sage: '#B2AC88', navy: '#000080',
+  burgundy: '#800020', teal: '#008080',
+};
+
+async function initPalette() {
+  // Load palettes from server or fallback
+  try {
+    const resp = await fetch(`${GEN_API}/palettes`);
+    if (resp.ok) {
+      const data = await resp.json();
+      palPalettes = {};
+      data.palettes.forEach(p => palPalettes[p.id] = p);
+      palColors = {};
+      data.colors.forEach(c => palColors[c.id] = c.hex);
+    } else throw new Error();
+  } catch {
+    palPalettes = PAL_FALLBACK_PALETTES;
+    palColors = PAL_FALLBACK_COLORS;
+  }
+
+  renderPaletteList();
+  renderPalColorPicker();
+  loadSourceAssets();
+}
+
+function renderPaletteList() {
+  const list = document.getElementById('palette-list');
+  if (!list) return;
+
+  const palettes = palPalettes;
+  list.innerHTML = Object.entries(palettes).map(([key, pal]) => {
+    const swatches = (pal.colors || []).map(c => {
+      const hex = palColors[c] || PAL_FALLBACK_COLORS[c] || '#888';
+      return `<span class="pal-mini-swatch" style="background:${hex}" title="${c}"></span>`;
+    }).join('');
+
+    return `<div class="palette-card ${key === palSelectedPalette ? 'selected' : ''}" onclick="selectPalette('${key}')">
+      <div class="palette-card-name">${pal.name || key}</div>
+      <div class="palette-card-swatches">${swatches}</div>
+      <div class="palette-card-count">${(pal.colors || []).length} colors</div>
+    </div>`;
+  }).join('');
+}
+
+function renderPalColorPicker() {
+  const grid = document.getElementById('pal-color-picker');
+  if (!grid) return;
+
+  const colors = Object.keys(palColors).length > 0 ? palColors : PAL_FALLBACK_COLORS;
+  grid.innerHTML = Object.entries(colors).map(([id, hex]) => {
+    const isSelected = palSelectedColors.includes(id);
+    return `<label class="pal-color-check" title="${id}">
+      <input type="checkbox" value="${id}" ${isSelected ? 'checked' : ''} onchange="togglePalColor('${id}')">
+      <span class="color-swatch-sm" style="background:${typeof hex === 'string' ? hex : hex};width:24px;height:24px;border-radius:4px;display:inline-block;border:${isSelected ? '2px solid #fff' : '1px solid rgba(255,255,255,0.2)'}"></span>
+    </label>`;
+  }).join('');
+}
+
+function selectPalette(id) {
+  palSelectedPalette = id;
+  const pal = palPalettes[id] || PAL_FALLBACK_PALETTES[id];
+  if (pal) {
+    palSelectedColors = [...(pal.colors || [])];
+  }
+  renderPaletteList();
+  renderPalColorPicker();
+}
+
+function togglePalColor(id) {
+  if (palSelectedColors.includes(id)) {
+    palSelectedColors = palSelectedColors.filter(c => c !== id);
+  } else {
+    palSelectedColors.push(id);
+  }
+  palSelectedPalette = ''; // custom selection
+  renderPaletteList();
+  renderPalColorPicker();
+}
+
+async function loadSourceAssets() {
+  const select = document.getElementById('pal-source');
+  if (!select) return;
+
+  try {
+    const resp = await fetch(`${GEN_API}/source-assets`);
+    if (resp.ok) {
+      const data = await resp.json();
+      select.innerHTML = '<option value="">-- Select a source pattern --</option>' +
+        data.assets.map(a => `<option value="${a.path}">${a.relativePath} (${(a.size / 1024).toFixed(0)}KB)</option>`).join('');
+    } else throw new Error();
+  } catch {
+    select.innerHTML = '<option value="">Server offline — start backend first</option>';
+  }
+}
+
+function handlePaletteUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  // For uploaded files, we'd need to save to source-assets via server
+  // For now, show a message
+  toast('Upload support coming soon. For now, place files in source-assets/ folder.', 'info');
+}
+
+function updatePalettePreview() {
+  const select = document.getElementById('pal-source');
+  const preview = document.getElementById('pal-source-preview');
+  if (!select || !preview) return;
+
+  palSourcePath = select.value;
+  if (palSourcePath) {
+    const relativePath = palSourcePath.replace(/\\/g, '/').split('source-assets/')[1] || '';
+    preview.innerHTML = `<img src="${GEN_API.replace('/api', '')}/source-assets/${relativePath}" alt="Source" class="pal-source-img">`;
+  } else {
+    preview.innerHTML = '';
+  }
+}
+
+async function previewVariationsUI() {
+  if (!palSourcePath) {
+    toast('Select a source pattern first.', 'error');
+    return;
+  }
+
+  const colors = palSelectedColors.length > 0 ? palSelectedColors : (palPalettes[palSelectedPalette]?.colors || ['gold', 'rose-gold', 'amethyst']);
+  const method = document.getElementById('pal-method')?.value;
+  const preset = document.getElementById('pal-preset-type')?.value;
+
+  const stripEl = document.getElementById('pal-preview-strip');
+  stripEl.innerHTML = '<p style="color:var(--text-muted)">Generating preview...</p>';
+
+  try {
+    const resp = await fetch(`${GEN_API}/recolor-preview`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        inputPath: palSourcePath,
+        colors,
+        method: method === 'auto' ? undefined : method,
+        preset,
+      }),
+    });
+
+    if (!resp.ok) throw new Error(await resp.text());
+
+    const blob = await resp.blob();
+    const url = URL.createObjectURL(blob);
+    stripEl.innerHTML = `<img src="${url}" alt="Preview Strip" class="pal-strip-img">
+      <p style="font-size:0.75rem;color:var(--text-muted);margin-top:8px;">${colors.length} color variations previewed</p>`;
+  } catch (e) {
+    stripEl.innerHTML = `<p style="color:var(--coral)">Preview failed: ${e.message}</p>`;
+  }
+}
+
+async function generateVariationsUI() {
+  if (!palSourcePath) {
+    toast('Select a source pattern first.', 'error');
+    return;
+  }
+
+  const colors = palSelectedColors.length > 0 ? palSelectedColors : (palPalettes[palSelectedPalette]?.colors || ['gold', 'rose-gold', 'amethyst']);
+  const method = document.getElementById('pal-method')?.value;
+  const preset = document.getElementById('pal-preset-type')?.value;
+  const baseName = document.getElementById('pal-collection-name')?.value?.trim() || undefined;
+
+  const progress = document.getElementById('pal-progress');
+  const progressFill = document.getElementById('pal-progress-fill');
+  const progressText = document.getElementById('pal-progress-text');
+
+  progress.style.display = '';
+  progressFill.style.width = '20%';
+  progressText.textContent = `Generating ${colors.length} color variations at 300 DPI...`;
+
+  try {
+    const resp = await fetch(`${GEN_API}/recolor`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        inputPath: palSourcePath,
+        colors,
+        method: method === 'auto' ? undefined : method,
+        preset,
+        baseName,
+      }),
+    });
+
+    progressFill.style.width = '80%';
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+
+    progressFill.style.width = '100%';
+    palLastResults = data.result;
+
+    const successCount = data.result.variations.filter(v => !v.error).length;
+    progressText.textContent = `Done! ${successCount}/${colors.length} variations generated.`;
+
+    // Show results
+    renderVariationResults(data.result);
+    loadCollections(); // Refresh collections
+    toast(`${successCount} color variations generated!`, 'success');
+  } catch (e) {
+    progressText.textContent = `Error: ${e.message}`;
+    progressFill.style.background = 'var(--coral)';
+    toast(`Generation failed: ${e.message}`, 'error');
+  }
+
+  setTimeout(() => {
+    progress.style.display = 'none';
+    progressFill.style.width = '0%';
+    progressFill.style.background = '';
+  }, 5000);
+}
+
+function renderVariationResults(result) {
+  const panel = document.getElementById('pal-results-panel');
+  const grid = document.getElementById('pal-results-grid');
+  if (!panel || !grid) return;
+
+  panel.style.display = '';
+  const serverBase = GEN_API.replace('/api', '');
+
+  grid.innerHTML = result.variations.filter(v => !v.error).map(v => {
+    const relativePath = v.file?.replace(/\\/g, '/').split('Journaling4Joy/')[1] || '';
+    const imageUrl = `${serverBase}/${relativePath}`;
+    return `<div class="variation-card">
+      <img src="${imageUrl}" alt="${v.colorName}" class="variation-img" onclick="window.open('${imageUrl}', '_blank')">
+      <div class="variation-info">
+        <span class="color-swatch-sm" style="background:${v.hex};width:12px;height:12px;border-radius:2px;display:inline-block;"></span>
+        <span>${v.colorName}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function scheduleVariations() {
+  if (!palLastResults || !palLastResults.variations) {
+    toast('Generate variations first.', 'error');
+    return;
+  }
+
+  const variations = palLastResults.variations.filter(v => !v.error);
+  switchView('scheduler');
+  showBatchModal();
+
+  setTimeout(() => {
+    const titlesEl = document.getElementById('batch-titles');
+    if (titlesEl) {
+      const baseName = palLastResults.baseName || 'Digital Paper';
+      titlesEl.value = variations.map(v =>
+        `${baseName} - ${v.colorName} - Digital Paper Pack`
+      ).join('\n');
+    }
+  }, 100);
 }
 
 // --- Scheduler ---

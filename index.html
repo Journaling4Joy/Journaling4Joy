@@ -38,6 +38,9 @@
         <a href="#" data-view="generator" class="nav-link">
           <span class="nav-icon">&#127912;</span> Pattern Generator
         </a>
+        <a href="#" data-view="palette" class="nav-link">
+          <span class="nav-icon">&#127752;</span> Color Palettes
+        </a>
         <a href="#" data-view="scheduler" class="nav-link">
           <span class="nav-icon">&#128197;</span> Scheduler
         </a>
@@ -461,6 +464,117 @@
               Keys are saved to the local backend config. They never leave your machine.
             </p>
             <button class="btn btn-outline" onclick="saveGeneratorKeys()">Save API Keys</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========== PALETTE VARIATION VIEW ========== -->
+      <section id="view-palette" class="view">
+        <div class="view-header">
+          <h2>Color Palette Variations</h2>
+          <p class="view-subtitle">Turn one pattern into a full color collection</p>
+        </div>
+
+        <div class="create-grid">
+          <!-- Source Selection -->
+          <div class="panel">
+            <div class="panel-header"><h3>1. Select Source Pattern</h3></div>
+            <div class="panel-body">
+              <div class="form-group">
+                <label>Source Image</label>
+                <select id="pal-source" onchange="updatePalettePreview()">
+                  <option value="">-- Loading source assets... --</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Or upload a file</label>
+                <input type="file" id="pal-upload" accept=".jpg,.jpeg,.png" onchange="handlePaletteUpload(event)">
+              </div>
+              <div id="pal-source-preview" class="pal-source-preview"></div>
+            </div>
+          </div>
+
+          <!-- Palette Selection -->
+          <div class="panel">
+            <div class="panel-header"><h3>2. Choose Palette</h3></div>
+            <div class="panel-body">
+              <div class="form-group">
+                <label>Preset Palette</label>
+                <div class="palette-list" id="palette-list"></div>
+              </div>
+
+              <div class="form-group" style="margin-top:16px;">
+                <label>Or Pick Individual Colors</label>
+                <div class="color-picker-grid" id="pal-color-picker"></div>
+              </div>
+
+              <div class="form-group" style="margin-top:12px;">
+                <label>Recoloring Method</label>
+                <select id="pal-method">
+                  <option value="auto">Auto (best for pattern type)</option>
+                  <option value="hue-shift">Hue Shift (patterns & damask)</option>
+                  <option value="tint">Tint Overlay (metallics & glitter)</option>
+                  <option value="multiply">Color Multiply (watercolors)</option>
+                  <option value="duotone">Duotone (vintage & gothic)</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label>Pattern Type (for auto-method)</label>
+                <select id="pal-preset-type">
+                  <option value="">-- Select if using auto method --</option>
+                  <option value="damask">Damask</option>
+                  <option value="metallic">Metallic</option>
+                  <option value="watercolor">Watercolor</option>
+                  <option value="vintage">Vintage</option>
+                  <option value="floral">Floral</option>
+                  <option value="geometric">Geometric</option>
+                  <option value="gothic">Gothic</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Preview Strip -->
+        <div class="panel">
+          <div class="panel-header">
+            <h3>3. Preview & Generate</h3>
+          </div>
+          <div class="panel-body">
+            <div id="pal-preview-strip" class="pal-preview-strip">
+              <p class="empty-state">Select a source pattern and palette to see preview.</p>
+            </div>
+
+            <div class="form-row" style="margin-top:16px;">
+              <div class="form-group">
+                <label>Collection Name</label>
+                <input type="text" id="pal-collection-name" placeholder="e.g., Vintage Damask Collection">
+              </div>
+            </div>
+
+            <div class="form-actions" style="margin-top:12px;">
+              <button class="btn btn-primary" onclick="generateVariationsUI()">Generate All Variations (300 DPI)</button>
+              <button class="btn btn-outline" onclick="previewVariationsUI()">Preview Strip</button>
+            </div>
+
+            <div id="pal-progress" style="display:none; margin-top:16px;">
+              <div class="gen-progress-bar">
+                <div class="gen-progress-fill" id="pal-progress-fill"></div>
+              </div>
+              <p id="pal-progress-text" style="font-size:0.8rem;color:var(--text-muted);margin-top:4px;">Processing...</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Results -->
+        <div class="panel" id="pal-results-panel" style="display:none;">
+          <div class="panel-header">
+            <h3>Generated Variations</h3>
+            <button class="btn btn-sm btn-primary" onclick="scheduleVariations()">Schedule All as Listings</button>
+          </div>
+          <div class="panel-body">
+            <div class="variations-grid" id="pal-results-grid"></div>
           </div>
         </div>
       </section>

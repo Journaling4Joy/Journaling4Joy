@@ -1169,3 +1169,135 @@ body {
   align-items: center;
   justify-content: center;
 }
+
+/* ---- Color Palette Engine ---- */
+.palette-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.palette-card {
+  padding: 10px 12px;
+  background: var(--surface2);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.palette-card:hover {
+  border-color: var(--border-light);
+  background: var(--surface3);
+}
+
+.palette-card.selected {
+  border-color: var(--primary);
+  background: var(--primary-bg);
+}
+
+.palette-card-name {
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.palette-card-swatches {
+  display: flex;
+  gap: 3px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.pal-mini-swatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  display: inline-block;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.1);
+}
+
+.palette-card-count {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+}
+
+.color-picker-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.pal-color-check {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+}
+
+.pal-color-check input {
+  display: none;
+}
+
+.pal-source-preview {
+  margin-top: 12px;
+}
+
+.pal-source-img {
+  max-width: 100%;
+  max-height: 250px;
+  object-fit: contain;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+
+.pal-strip-img {
+  width: 100%;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+
+.pal-preview-strip {
+  min-height: 80px;
+}
+
+.variations-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.variation-card {
+  background: var(--surface2);
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  transition: transform 0.15s;
+}
+
+.variation-card:hover {
+  transform: scale(1.02);
+}
+
+.variation-img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  cursor: zoom-in;
+}
+
+.variation-info {
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.view-subtitle {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-left: 12px;
+}

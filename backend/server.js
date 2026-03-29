@@ -14,6 +14,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { generatePattern, batchGenerate, STYLE_PRESETS, COLOR_PALETTES } from './pattern-generator.js';
+import { generateVariations, generatePreviewStrip, COLORS, PALETTES, METHODS, selectMethod } from './color-engine.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.J4J_PORT || 4444;
@@ -131,6 +132,76 @@ const routes = {
     const schedulePath = path.join(__dirname, 'schedule.json');
     fs.writeFileSync(schedulePath, JSON.stringify(body, null, 2));
     sendJson(res, { success: true, path: schedulePath });
+  },
+
+  'GET /api/palettes': (req, res) => {
+    sendJson(res, {
+      palettes: Object.entries(PALETTES).map(([key, val]) => ({
+        id: key, name: val.name, description: val.description, colors: val.colors,
+      })),
+      colors: Object.entries(COLORS).map(([key, val]) => ({
+        id: key, hex: val.hex, tint: val.tint,
+      })),
+      methods: Object.keys(METHODS),
+    });
+  },
+
+  'POST /api/recolor': async (req, res) => {
+    const body = await readBody(req);
+    const { inputPath, palette, colors, method, preset, outputDir, baseName } = body;
+
+    try {
+      const result = await generateVariations({
+        inputPath, palette, colors, method, preset, outputDir, baseName,
+      });
+      sendJson(res, { success: true, result });
+    } catch (e) {
+      sendError(res, e.message);
+    }
+  },
+
+  'POST /api/recolor-preview': async (req, res) => {
+    const body = await readBody(req);
+    const { inputPath, palette, colors, method, preset } = body;
+
+    try {
+      const strip = await generatePreviewStrip({ inputPath, palette, colors, method, preset });
+      res.writeHead(200, {
+        'Content-Type': 'image/jpeg',
+        'Access-Control-Allow-Origin': '*',
+      });
+      res.end(strip);
+    } catch (e) {
+      sendError(res, e.message);
+    }
+  },
+
+  'GET /api/source-assets': (req, res) => {
+    const assetsDir = path.join(FRONTEND_DIR, 'source-assets');
+    if (!fs.existsSync(assetsDir)) {
+      sendJson(res, { assets: [] });
+      return;
+    }
+
+    const assets = [];
+    function scanDir(dir, prefix = '') {
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          scanDir(fullPath, prefix ? `${prefix}/${entry.name}` : entry.name);
+        } else if (/\.(jpg|jpeg|png|gif|bmp|webp)$/i.test(entry.name)) {
+          assets.push({
+            name: entry.name,
+            path: fullPath.replace(/\\/g, '/'),
+            relativePath: prefix ? `${prefix}/${entry.name}` : entry.name,
+            size: fs.statSync(fullPath).size,
+          });
+        }
+      }
+    }
+    scanDir(assetsDir);
+    sendJson(res, { assets });
   },
 
   'GET /api/health': (req, res) => {
