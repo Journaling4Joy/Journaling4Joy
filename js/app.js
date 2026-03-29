@@ -32,6 +32,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initGenerator();
   initPalette();
   initMockups();
+  initCollectionCreator();
 
   // Set redirect URI display
   const redirectUri = EtsyAPI.getRedirectUri();
@@ -76,9 +77,9 @@ function switchView(view) {
   const titles = {
     dashboard: 'Dashboard', listings: 'My Listings', pipeline: 'Pipeline',
     create: 'Create Product', edits: 'Edit Requests', generator: 'Pattern Generator',
-    palette: 'Color Palettes', mockups: 'Mockup Generator',
-    scheduler: 'Listing Scheduler', marketing: 'Marketing',
-    analytics: 'Sales & Analytics', settings: 'Settings'
+    palette: 'Color Palettes', collection: 'Collection Creator',
+    mockups: 'Mockup Generator', scheduler: 'Listing Scheduler',
+    marketing: 'Marketing', analytics: 'Sales & Analytics', settings: 'Settings'
   };
   document.getElementById('page-title').textContent = titles[view] || view;
 }
@@ -1626,6 +1627,244 @@ function scheduleVariations() {
       ).join('\n');
     }
   }, 100);
+}
+
+// --- Collection Creator ---
+const COL_STEPS = [
+  { id: 'generate', name: 'Generate Pattern', icon: '&#127912;' },
+  { id: 'variations', name: 'Color Variations', icon: '&#127752;' },
+  { id: 'mockups', name: 'Mockups', icon: '&#128247;' },
+  { id: 'seo', name: 'SEO Listings', icon: '&#128221;' },
+  { id: 'package', name: 'Package Files', icon: '&#128230;' },
+  { id: 'schedule', name: 'Schedule', icon: '&#128197;' },
+];
+
+let colPollingInterval = null;
+
+async function initCollectionCreator() {
+  // Set default start date to tomorrow
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const startDateEl = document.getElementById('col-start-date');
+  if (startDateEl) startDateEl.value = tomorrow.toISOString().slice(0, 10);
+
+  // Load source assets for base pattern selector
+  try {
+    const resp = await fetch(`${GEN_API}/source-assets`);
+    if (resp.ok) {
+      const data = await resp.json();
+      const select = document.getElementById('col-base-pattern');
+      if (select) {
+        select.innerHTML = '<option value="">Generate new with AI</option>' +
+          data.assets.map(a => `<option value="${a.path}">${a.relativePath}</option>`).join('');
+      }
+    }
+  } catch { /* server offline */ }
+
+  loadExistingCollections();
+}
+
+function previewCollectionConfig() {
+  const config = getCollectionConfig();
+  showModal('Collection Config Preview', `
+    <pre style="background:var(--surface2);padding:16px;border-radius:var(--radius);font-size:0.75rem;overflow-x:auto;max-height:400px;">${JSON.stringify(config, null, 2)}</pre>
+    <p style="margin-top:12px;font-size:0.8rem;color:var(--text-muted);">
+      This will generate <strong>${config.palette ? '5-10' : '?'}</strong> color variations,
+      <strong>${config.mockupTemplates?.length || 3}</strong> mockup styles each,
+      and schedule listings starting ${config.scheduleStart || 'tomorrow'}.
+    </p>
+  `);
+}
+
+function getCollectionConfig() {
+  const mockupSelect = document.getElementById('col-mockups');
+  const selectedMockups = mockupSelect ? Array.from(mockupSelect.selectedOptions).map(o => o.value) : ['listing-hero', 'journal-cover', 'flat-lay'];
+  const basePattern = document.getElementById('col-base-pattern')?.value;
+
+  return {
+    name: document.getElementById('col-name')?.value?.trim() || undefined,
+    preset: document.getElementById('col-preset')?.value || 'damask',
+    palette: document.getElementById('col-palette')?.value || 'metallics-core',
+    provider: document.getElementById('col-provider')?.value || 'openai',
+    price: parseFloat(document.getElementById('col-price')?.value || '3.79'),
+    mockupTemplates: selectedMockups,
+    scheduleStart: document.getElementById('col-start-date')?.value || undefined,
+    scheduleGap: parseInt(document.getElementById('col-gap')?.value || '1'),
+    scheduleTime: document.getElementById('col-time')?.value || '10:00',
+    skipGenerate: !!basePattern,
+    basePatternPath: basePattern || undefined,
+  };
+}
+
+async function startCollectionCreation() {
+  const config = getCollectionConfig();
+
+  if (!config.name) {
+    // Auto-generate name from preset
+    const presetNames = {
+      damask: 'Vintage Damask', metallic: 'Metallic Shimmer', watercolor: 'Watercolor Wash',
+      'metallic-foil': 'Metallic Foil', 'metallic-glitter': 'Glitter Sparkle',
+      'watercolor-floral': 'Watercolor Floral', vintage: 'Vintage Distressed',
+      floral: 'Classic Floral', geometric: 'Art Deco Geometric', gothic: 'Gothic Elegance',
+      'dark-academia': 'Dark Academia', 'cottage-floral': 'Cottagecore Floral',
+      'damask-pysanky': 'Pysanky Damask', 'damask-mayan': 'Mayan Damask',
+      chevron: 'Chevron Stripes', stars: 'Celestial Stars',
+    };
+    config.name = (presetNames[config.preset] || config.preset) + ' Collection';
+  }
+
+  // Show progress panel
+  const progressPanel = document.getElementById('col-progress-panel');
+  progressPanel.style.display = '';
+  renderPipelineSteps({});
+
+  toast(`Creating collection: "${config.name}"...`, 'info');
+
+  try {
+    const resp = await fetch(`${GEN_API}/collection/create`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
+    });
+
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+
+    // Start polling for progress
+    startProgressPolling(config.name);
+  } catch (e) {
+    toast(`Failed to start collection: ${e.message}`, 'error');
+  }
+}
+
+function startProgressPolling(collectionName) {
+  if (colPollingInterval) clearInterval(colPollingInterval);
+
+  const safeName = collectionName.replace(/[^a-zA-Z0-9-_ ]/g, '').replace(/\s+/g, '-');
+
+  colPollingInterval = setInterval(async () => {
+    try {
+      const resp = await fetch(`${GEN_API}/collection/progress?name=${encodeURIComponent(safeName)}`);
+      const data = await resp.json();
+
+      if (data.progress) {
+        renderPipelineSteps(data.progress.steps || {});
+
+        // Check if complete
+        if (data.progress.steps.complete || data.progress.steps.schedule?.status === 'complete') {
+          clearInterval(colPollingInterval);
+          colPollingInterval = null;
+          toast(`Collection "${collectionName}" is ready!`, 'success');
+          loadExistingCollections();
+
+          // Offer to import schedule
+          setTimeout(() => {
+            showModal('Collection Complete!', `
+              <p style="margin-bottom:16px;">"${collectionName}" has been created with all variations, mockups, SEO listings, and a publishing schedule.</p>
+              <div class="form-actions">
+                <button class="btn btn-primary" onclick="importCollectionSchedule('${safeName}'); closeModal();">Import Schedule to Dashboard</button>
+                <button class="btn btn-outline" onclick="closeModal()">Close</button>
+              </div>
+            `);
+          }, 500);
+        }
+      }
+    } catch { /* server may be busy */ }
+  }, 3000);
+}
+
+function renderPipelineSteps(stepData) {
+  const container = document.getElementById('col-pipeline-steps');
+  if (!container) return;
+
+  container.innerHTML = COL_STEPS.map(step => {
+    const data = stepData[step.id] || {};
+    let statusClass = 'pending';
+    let statusIcon = '&#9711;'; // empty circle
+
+    if (data.status === 'running') {
+      statusClass = 'running';
+      statusIcon = '&#9881;'; // gear
+    } else if (data.status === 'complete') {
+      statusClass = 'complete';
+      statusIcon = '&#10003;'; // check
+    } else if (data.status === 'failed') {
+      statusClass = 'failed';
+      statusIcon = '&#10007;'; // x
+    }
+
+    return `<div class="pipeline-step ${statusClass}">
+      <span class="pipeline-step-icon">${step.icon}</span>
+      <div class="pipeline-step-info">
+        <div class="pipeline-step-name">${step.name}</div>
+        <div class="pipeline-step-detail">${data.detail || (statusClass === 'pending' ? 'Waiting...' : '')}</div>
+      </div>
+      <span class="pipeline-step-status">${statusIcon}</span>
+    </div>`;
+  }).join('');
+}
+
+async function loadExistingCollections() {
+  const listEl = document.getElementById('col-existing-list');
+  if (!listEl) return;
+
+  try {
+    const resp = await fetch(`${GEN_API}/collection/list`);
+    const data = await resp.json();
+
+    if (!data.collections || data.collections.length === 0) {
+      listEl.innerHTML = '<p class="empty-state">No collections yet. Create your first one above!</p>';
+      return;
+    }
+
+    listEl.innerHTML = data.collections.map(col => {
+      const name = col.collection || 'Unknown';
+      const colorCount = col.colors?.length || '?';
+      const date = col.createdAt ? new Date(col.createdAt).toLocaleDateString() : '';
+      const statusBadge = col.status === 'complete'
+        ? '<span class="badge" style="background:var(--green-bg);color:var(--green);">Complete</span>'
+        : col.status === 'in-progress'
+          ? '<span class="badge" style="background:var(--gold-bg);color:var(--gold);">In Progress</span>'
+          : '<span class="badge">Unknown</span>';
+
+      return `<div class="queue-item">
+        <div class="queue-item-info">
+          <h4>${name}</h4>
+          <p>${colorCount} colors ${col.preset ? `| ${col.preset}` : ''} ${date ? `| ${date}` : ''}</p>
+        </div>
+        ${statusBadge}
+        <div class="queue-item-actions">
+          ${col.status === 'complete' ? `<button class="btn btn-sm btn-primary" onclick="importCollectionSchedule('${name.replace(/\s+/g, '-')}')">Import Schedule</button>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+  } catch {
+    listEl.innerHTML = '<p class="empty-state">Start the backend server to view collections.</p>';
+  }
+}
+
+async function importCollectionSchedule(safeName) {
+  // Load the collection's schedule.json and merge into the dashboard scheduler
+  try {
+    const resp = await fetch(`${GEN_API.replace('/api', '')}/collections/${safeName}/schedule.json`);
+    if (!resp.ok) throw new Error('Could not load schedule');
+    const scheduleItems = await resp.json();
+
+    // Add each item to the dashboard scheduler
+    let imported = 0;
+    for (const item of scheduleItems) {
+      Scheduler.addScheduledItem(item);
+      imported++;
+    }
+
+    renderCalendar();
+    renderScheduleQueue();
+    updateScheduleStats();
+    toast(`Imported ${imported} listings to scheduler!`, 'success');
+    switchView('scheduler');
+  } catch (e) {
+    toast(`Import failed: ${e.message}`, 'error');
+  }
 }
 
 // --- Mockup Generator ---

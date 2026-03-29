@@ -41,6 +41,9 @@
         <a href="#" data-view="palette" class="nav-link">
           <span class="nav-icon">&#127752;</span> Color Palettes
         </a>
+        <a href="#" data-view="collection" class="nav-link">
+          <span class="nav-icon">&#9889;</span> Collection Creator
+        </a>
         <a href="#" data-view="mockups" class="nav-link">
           <span class="nav-icon">&#128247;</span> Mockups
         </a>
@@ -578,6 +581,140 @@
           </div>
           <div class="panel-body">
             <div class="variations-grid" id="pal-results-grid"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========== COLLECTION CREATOR VIEW ========== -->
+      <section id="view-collection" class="view">
+        <div class="view-header">
+          <h2>Collection Creator</h2>
+          <p class="view-subtitle">One click: pattern &rarr; variations &rarr; mockups &rarr; SEO &rarr; schedule</p>
+        </div>
+
+        <!-- Create New Collection -->
+        <div class="panel">
+          <div class="panel-header"><h3>New Collection</h3></div>
+          <div class="panel-body">
+            <div class="form-row">
+              <div class="form-group" style="flex:2;">
+                <label>Collection Name</label>
+                <input type="text" id="col-name" placeholder="e.g., Vintage Damask Collection">
+              </div>
+              <div class="form-group">
+                <label>Price per Listing ($)</label>
+                <input type="number" id="col-price" step="0.01" min="0.20" value="3.79">
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>Pattern Style</label>
+                <select id="col-preset">
+                  <option value="damask">Damask Pattern</option>
+                  <option value="damask-pysanky">Pysanky Damask</option>
+                  <option value="damask-mayan">Mayan Damask</option>
+                  <option value="metallic">Metallic Texture</option>
+                  <option value="metallic-foil">Metallic Foil</option>
+                  <option value="metallic-glitter">Metallic Glitter</option>
+                  <option value="watercolor">Watercolor Wash</option>
+                  <option value="watercolor-floral">Watercolor Floral</option>
+                  <option value="vintage">Vintage Distressed</option>
+                  <option value="floral">Classic Floral</option>
+                  <option value="geometric">Geometric</option>
+                  <option value="chevron">Chevron</option>
+                  <option value="stars">Stars</option>
+                  <option value="cottage-floral">Cottagecore Floral</option>
+                  <option value="dark-academia">Dark Academia</option>
+                  <option value="gothic">Gothic / Witchy</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Color Palette</label>
+                <select id="col-palette">
+                  <option value="metallics">Metallics (10 colors)</option>
+                  <option value="metallics-core" selected>Metallics Core (5 colors)</option>
+                  <option value="jewel">Jewel Tones (6 colors)</option>
+                  <option value="earth">Earth Tones (6 colors)</option>
+                  <option value="pastels">Soft Pastels (5 colors)</option>
+                  <option value="dark">Dark &amp; Moody (5 colors)</option>
+                  <option value="j4j-damask">J4J Damask Match (8 colors)</option>
+                  <option value="rainbow">Rainbow Full (10 colors)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>AI Provider</label>
+                <select id="col-provider">
+                  <option value="openai">OpenAI (DALL-E 3)</option>
+                  <option value="stability">Stability AI</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>Mockup Styles</label>
+                <select id="col-mockups" multiple size="4" style="height:auto;">
+                  <option value="listing-hero" selected>Etsy Listing Hero</option>
+                  <option value="journal-cover" selected>Journal Cover</option>
+                  <option value="flat-lay" selected>Flat Lay Scene</option>
+                  <option value="journal-spread">Journal Spread</option>
+                  <option value="planner-cover">Planner Cover</option>
+                  <option value="scrapbook-page">Scrapbook Page</option>
+                  <option value="digital-preview">Digital Preview Grid</option>
+                  <option value="card-making">Greeting Card</option>
+                </select>
+                <small style="color:var(--text-dim);">Ctrl+click to select multiple</small>
+              </div>
+              <div class="form-group">
+                <label>Schedule Start Date</label>
+                <input type="date" id="col-start-date">
+                <div style="margin-top:8px;">
+                  <label>Days Between Listings</label>
+                  <input type="number" id="col-gap" min="1" max="30" value="1">
+                </div>
+                <div style="margin-top:8px;">
+                  <label>Publish Time</label>
+                  <input type="time" id="col-time" value="10:00">
+                </div>
+              </div>
+            </div>
+
+            <details class="gen-advanced">
+              <summary>Use Existing Pattern (skip AI generation)</summary>
+              <div class="form-group" style="margin-top:12px;">
+                <label>Base Pattern Path</label>
+                <select id="col-base-pattern">
+                  <option value="">Generate new with AI</option>
+                </select>
+              </div>
+            </details>
+
+            <div class="form-actions" style="margin-top:16px;">
+              <button class="btn btn-accent" onclick="startCollectionCreation()" style="font-size:1rem;padding:12px 32px;">
+                Create Collection
+              </button>
+              <button class="btn btn-outline" onclick="previewCollectionConfig()">Preview Config</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Pipeline Progress -->
+        <div class="panel" id="col-progress-panel" style="display:none;">
+          <div class="panel-header"><h3>Pipeline Progress</h3></div>
+          <div class="panel-body">
+            <div class="pipeline-steps" id="col-pipeline-steps"></div>
+          </div>
+        </div>
+
+        <!-- Existing Collections -->
+        <div class="panel">
+          <div class="panel-header">
+            <h3>Your Collections</h3>
+            <button class="btn btn-sm btn-outline" onclick="loadExistingCollections()">Refresh</button>
+          </div>
+          <div class="panel-body" id="col-existing-list">
+            <p class="empty-state">No collections yet. Create your first one above!</p>
           </div>
         </div>
       </section>

@@ -1387,3 +1387,88 @@ body {
   font-weight: 500;
   text-align: center;
 }
+
+/* ---- Collection Creator Pipeline ---- */
+.pipeline-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pipeline-step {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  transition: all 0.3s;
+}
+
+.pipeline-step.running {
+  background: var(--primary-bg);
+  border-color: var(--primary);
+}
+
+.pipeline-step.complete {
+  background: var(--green-bg);
+  border-color: var(--green);
+}
+
+.pipeline-step.failed {
+  background: var(--coral-bg);
+  border-color: var(--coral);
+}
+
+.pipeline-step-icon {
+  font-size: 1.3rem;
+  flex-shrink: 0;
+  width: 28px;
+  text-align: center;
+}
+
+.pipeline-step-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.pipeline-step-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.pipeline-step-detail {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.pipeline-step.running .pipeline-step-detail {
+  color: var(--primary);
+}
+
+.pipeline-step.complete .pipeline-step-detail {
+  color: var(--green);
+}
+
+.pipeline-step.failed .pipeline-step-detail {
+  color: var(--coral);
+}
+
+.pipeline-step-status {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+  width: 24px;
+  text-align: center;
+}
+
+.pipeline-step.pending .pipeline-step-status { color: var(--text-dim); }
+.pipeline-step.running .pipeline-step-status { color: var(--primary); animation: spin 2s linear infinite; }
+.pipeline-step.complete .pipeline-step-status { color: var(--green); }
+.pipeline-step.failed .pipeline-step-status { color: var(--coral); }
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}

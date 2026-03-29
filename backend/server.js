@@ -16,6 +16,7 @@ import { fileURLToPath } from 'url';
 import { generatePattern, batchGenerate, STYLE_PRESETS, COLOR_PALETTES } from './pattern-generator.js';
 import { generateVariations, generatePreviewStrip, COLORS, PALETTES, METHODS, selectMethod } from './color-engine.js';
 import { TEMPLATES, generateMockup, generateAllMockups, batchMockups } from './mockup-engine.js';
+import { createCollection, listCollections, getCollectionProgress, STEPS } from './collection-creator.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.J4J_PORT || 4444;
@@ -265,6 +266,29 @@ const routes = {
     } catch (e) {
       sendError(res, e.message);
     }
+  },
+
+  'POST /api/collection/create': async (req, res) => {
+    const config = await readBody(req);
+    // Run asynchronously — client polls progress
+    sendJson(res, { success: true, message: 'Collection creation started', collection: config.name || 'Collection' });
+    createCollection(config).catch(e => console.error('Collection error:', e.message));
+  },
+
+  'GET /api/collection/list': (req, res) => {
+    sendJson(res, { collections: listCollections() });
+  },
+
+  'GET /api/collection/progress': (req, res) => {
+    const url = new URL(req.url, `http://localhost:${PORT}`);
+    const name = url.searchParams.get('name');
+    if (!name) { sendError(res, 'name parameter required', 400); return; }
+    const progress = getCollectionProgress(name);
+    sendJson(res, { progress });
+  },
+
+  'GET /api/collection/steps': (req, res) => {
+    sendJson(res, { steps: STEPS });
   },
 
   'GET /api/health': (req, res) => {
