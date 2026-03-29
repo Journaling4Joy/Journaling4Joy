@@ -1,0 +1,101 @@
+name: Minecraft Video Processor
+
+on:
+  workflow_dispatch:
+    inputs:
+      dropbox_url:
+        description: 'Dropbox shared folder URL'
+        required: true
+        default: 'https://www.dropbox.com/scl/fo/5scu2umi7guc0vr3qrjxk/AAxUrTd4I4Uhtcclp_yfL2Q?rlkey=hcxnmtxuul91b3iuabuzwptah&dl=1'
+      channel_name:
+        description: 'YouTube channel name'
+        required: true
+        default: "MaMarie's Minecraft"
+
+jobs:
+  process-videos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          pip install opencv-python-headless numpy pillow
+
+      - name: Check disk space
+        run: df -h
+
+      - name: Download footage from Dropbox
+        run: |
+          mkdir -p raw_footage
+          echo "Downloading footage..."
+          curl -L --max-time 1800 --retry 3 \
+            "${{ github.event.inputs.dropbox_url }}" \
+            -o raw_footage/footage.zip
+          ls -lh raw_footage/footage.zip
+          echo "Download complete"
+
+      - name: Extract footage
+        run: |
+          cd raw_footage
+          # Try standard unzip first
+          if unzip -o footage.zip 2>/dev/null; then
+            echo "Standard unzip succeeded"
+          else
+            echo "Standard unzip failed, trying python extraction..."
+            python3 ../scripts/extract_videos_from_zip.py footage.zip .
+          fi
+          rm -f footage.zip
+          echo "Extracted files:"
+          ls -lh *.mp4 *.mov *.m4v 2>/dev/null || echo "No video files found directly"
+          find . -name "*.mp4" -o -name "*.mov" -o -name "*.m4v" | head -20
+
+      - name: Flatten video files
+        run: |
+          # Move all video files to raw_footage root
+          find raw_footage -type f \( -name "*.mp4" -o -name "*.mov" -o -name "*.m4v" \) -exec mv {} raw_footage/ \;
+          echo "Video files in raw_footage:"
+          ls -lh raw_footage/*.mp4 raw_footage/*.mov raw_footage/*.m4v 2>/dev/null
+
+      - name: Process videos
+        run: python3 scripts/minecraft_cloud_processor.py raw_footage
+
+      - name: Check output
+        run: |
+          echo "=== Output files ==="
+          ls -lh output/
+          echo "=== Thumbnails ==="
+          ls -lh thumbnails/
+          echo "=== Disk usage ==="
+          df -h
+
+      - name: Upload final videos
+        uses: actions/upload-artifact@v4
+        with:
+          name: mamaries-minecraft-videos
+          path: output/*.mp4
+          retention-days: 30
+
+      - name: Upload thumbnails
+        uses: actions/upload-artifact@v4
+        with:
+          name: mamaries-minecraft-thumbnails
+          path: thumbnails/
+          retention-days: 30
+
+      - name: Upload metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: mamaries-minecraft-metadata
+          path: output/*.json
+          retention-days: 30
